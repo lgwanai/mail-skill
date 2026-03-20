@@ -234,10 +234,14 @@ def cmd_read(args, config, db):
 def cmd_send(args, config, db):
     client = get_client(config, args.account)
     try:
+        # Replace literal "\n" strings with actual newline characters
+        # This handles cases where AI passes "Line 1\nLine 2" as a single string argument
+        body_text = args.body.replace('\\n', '\n')
+        
         client.send_email(
             to=args.to,
             subject=args.subject,
-            body_text=args.body,
+            body_text=body_text,
             cc=args.cc,
             attachments=args.attach
         )
