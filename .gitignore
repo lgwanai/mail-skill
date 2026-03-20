@@ -1,0 +1,8 @@
+dist/
+.env
+build.sh
+mail_data/
+__pycache__/
+*.pyc
+.DS_Store
+RELEASE_NOTE.md
