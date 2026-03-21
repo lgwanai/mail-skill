@@ -169,10 +169,29 @@ class MailClient:
             mailbox.folder.set(folder)
             mailbox.flag(uids, imap_tools.MailMessageFlags.FLAGGED, is_starred)
             
+    def create_folder(self, folder_name):
+        """Create a new folder on the server"""
+        try:
+            with self._get_mailbox() as mailbox:
+                if not mailbox.folder.exists(folder_name):
+                    mailbox.folder.create(folder_name)
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Failed to create folder {folder_name}: {e}")
+            raise
+
     def move_emails(self, uids, destination_folder, source_folder='INBOX'):
         """Move emails to another folder"""
         if not uids:
             return
+        
+        # Try to create folder first, ignore if it already exists
+        try:
+            self.create_folder(destination_folder)
+        except:
+            pass
+            
         with self._get_mailbox() as mailbox:
             mailbox.folder.set(source_folder)
             mailbox.move(uids, destination_folder)

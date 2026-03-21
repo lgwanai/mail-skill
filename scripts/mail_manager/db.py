@@ -24,6 +24,7 @@ class MailDatabase:
                 CREATE TABLE IF NOT EXISTS emails (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     message_id TEXT UNIQUE,
+                    imap_uid TEXT,
                     account TEXT,
                     thread_id TEXT,
                     subject TEXT,
@@ -42,6 +43,13 @@ class MailDatabase:
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
+            # Migration: add imap_uid if it doesn't exist
+            cursor.execute("PRAGMA table_info(emails)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'imap_uid' not in columns:
+                cursor.execute("ALTER TABLE emails ADD COLUMN imap_uid TEXT")
+
             
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS attachments (
@@ -79,17 +87,19 @@ class MailDatabase:
             
             cursor.execute('''
                 INSERT INTO emails (
-                    message_id, account, thread_id, subject, sender, recipient, cc, 
+                    message_id, imap_uid, account, thread_id, subject, sender, recipient, cc, 
                     date, body_text, has_attachment, is_read, is_starred, labels, folder, 
                     local_path_eml, local_path_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(message_id) DO UPDATE SET
+                    imap_uid=excluded.imap_uid,
                     is_read=excluded.is_read,
                     is_starred=excluded.is_starred,
                     labels=excluded.labels,
                     folder=excluded.folder
             ''', (
                 email_data.get('message_id'),
+                email_data.get('imap_uid'),
                 email_data.get('account'),
                 email_data.get('thread_id'),
                 email_data.get('subject', ''),

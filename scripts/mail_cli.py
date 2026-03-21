@@ -258,14 +258,19 @@ def cmd_mark(args, config, db):
     client = get_client(config, email['account'])
     
     try:
+        imap_uid = email.get('imap_uid')
+        if not imap_uid:
+            print(json.dumps({"status": "error", "message": "Cannot mark email on server: missing imap_uid in database. Please fetch emails again."}))
+            return
+
         if args.read is not None:
             is_read = bool(args.read)
-            client.mark_as_read(email['imap_uid'], email['folder'], is_read)
+            client.mark_as_read(imap_uid, email['folder'], is_read)
             db.update_flags(args.message_id, is_read=is_read)
             
         if args.starred is not None:
             is_starred = bool(args.starred)
-            client.mark_as_starred(email['imap_uid'], email['folder'], is_starred)
+            client.mark_as_starred(imap_uid, email['folder'], is_starred)
             db.update_flags(args.message_id, is_starred=is_starred)
             
         print(json.dumps({"status": "success", "message": "Flags updated"}))
@@ -281,7 +286,12 @@ def cmd_move(args, config, db):
     client = get_client(config, email['account'])
     
     try:
-        client.move_emails(email['imap_uid'], args.target_folder, email['folder'])
+        imap_uid = email.get('imap_uid')
+        if not imap_uid:
+            print(json.dumps({"status": "error", "message": "Cannot move email on server: missing imap_uid in database. Please fetch emails again."}))
+            return
+
+        client.move_emails(imap_uid, args.target_folder, email['folder'])
         db.update_flags(args.message_id, folder=args.target_folder)
         print(json.dumps({"status": "success", "message": f"Moved to {args.target_folder}"}))
     except Exception as e:
@@ -296,7 +306,12 @@ def cmd_delete(args, config, db):
     client = get_client(config, email['account'])
     
     try:
-        client.delete_emails(email['imap_uid'], email['folder'])
+        imap_uid = email.get('imap_uid')
+        if not imap_uid:
+            print(json.dumps({"status": "error", "message": "Cannot delete email on server: missing imap_uid in database. Please fetch emails again."}))
+            return
+
+        client.delete_emails(imap_uid, email['folder'])
         db.delete_email(args.message_id)
         print(json.dumps({"status": "success", "message": "Email deleted"}))
     except Exception as e:
