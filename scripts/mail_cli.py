@@ -71,6 +71,21 @@ def get_client(config, email_account=None):
         
     return MailClient(account_config)
 
+def _get_account_paths(config, email_address):
+    """Generate isolated storage paths for a specific email account"""
+    # Sanitize email address for directory name
+    safe_email = "".join([c for c in email_address if c.isalpha() or c.isdigit() or c in '-_.@']).rstrip()
+    
+    account_root = os.path.join(config['STORAGE_ROOT'], safe_email)
+    
+    return {
+        'root': account_root,
+        'db_path': os.path.join(account_root, 'mail_index.db'),
+        'attach_path': os.path.join(account_root, 'attachments'),
+        'eml_path': os.path.join(account_root, 'eml'),
+        'json_path': os.path.join(account_root, 'json')
+    }
+
 def _run_fetch_task(task_id, config, db_path, args):
     # Ensure this runs in a completely separate process to avoid thread killing issues
     task_file = os.path.join(TASKS_DIR, f"{task_id}.json")
@@ -82,14 +97,20 @@ def _run_fetch_task(task_id, config, db_path, args):
             json.dump(info, f)
 
     try:
-        db = MailDatabase(db_path)
         client = get_client(config, args.account)
-        update_status("running", f"Connecting and fetching emails for {client.email}...")
+        paths = _get_account_paths(config, client.email)
+        
+        # Override db_path with isolated db_path
+        db_path = paths['db_path']
         
         # Ensure directories exist
-        os.makedirs(config['ATTACHMENT_PATH'], exist_ok=True)
-        os.makedirs(os.path.join(config['STORAGE_ROOT'], 'eml'), exist_ok=True)
-        os.makedirs(os.path.join(config['STORAGE_ROOT'], 'json'), exist_ok=True)
+        os.makedirs(paths['root'], exist_ok=True)
+        os.makedirs(paths['attach_path'], exist_ok=True)
+        os.makedirs(paths['eml_path'], exist_ok=True)
+        os.makedirs(paths['json_path'], exist_ok=True)
+        
+        db = MailDatabase(db_path)
+        update_status("running", f"Connecting and fetching emails for {client.email}...")
         
         # Fetch from server
         emails = client.fetch_emails(
@@ -105,7 +126,7 @@ def _run_fetch_task(task_id, config, db_path, args):
         for email_data in emails:
             # Save EML
             eml_filename = "".join([c for c in email_data['message_id'] if c.isalpha() or c.isdigit() or c in '-_.']).rstrip() + '.eml'
-            eml_path = os.path.join(config['STORAGE_ROOT'], 'eml', eml_filename)
+            eml_path = os.path.join(paths['eml_path'], eml_filename)
             with open(eml_path, 'wb') as f:
                 f.write(bytes(email_data['raw_email']))
             email_data['local_path_eml'] = eml_path
@@ -113,7 +134,7 @@ def _run_fetch_task(task_id, config, db_path, args):
             # Save attachments
             db_attachments = []
             if email_data['attachments']:
-                att_dir = os.path.join(config['ATTACHMENT_PATH'], email_data['message_id'].replace('/', '_'))
+                att_dir = os.path.join(paths['attach_path'], email_data['message_id'].replace('/', '_'))
                 os.makedirs(att_dir, exist_ok=True)
                 
                 for att in email_data['attachments']:
@@ -131,7 +152,7 @@ def _run_fetch_task(task_id, config, db_path, args):
             
             # Save JSON
             json_filename = eml_filename.replace('.eml', '.json')
-            json_path = os.path.join(config['STORAGE_ROOT'], 'json', json_filename)
+            json_path = os.path.join(paths['json_path'], json_filename)
             
             # Remove raw_email before saving JSON
             json_data = {k: v for k, v in email_data.items() if k not in ['raw_email', 'html_body']}
@@ -196,7 +217,12 @@ def cmd_fetch_status(args, config, db):
     print(json.dumps(data, indent=2))
 
 def cmd_search(args, config, db):
-    results = db.search_emails(
+    # Determine the isolated db_path
+    client = get_client(config, getattr(args, 'account', None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths['db_path'])
+    
+    results = isolated_db.search_emails(
         query=args.query,
         account=args.account,
         folder=args.folder,
@@ -224,7 +250,12 @@ def cmd_search(args, config, db):
     print(json.dumps({"status": "success", "count": len(results), "results": output}, ensure_ascii=False, indent=2))
 
 def cmd_read(args, config, db):
-    email = db.get_email(args.message_id)
+    # Determine the isolated db_path
+    client = get_client(config, getattr(args, 'account', None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths['db_path'])
+    
+    email = isolated_db.get_email(args.message_id)
     if not email:
         print(json.dumps({"status": "error", "message": "Email not found locally"}))
         return
@@ -232,7 +263,7 @@ def cmd_read(args, config, db):
     print(json.dumps({"status": "success", "email": email}, ensure_ascii=False, indent=2))
 
 def cmd_send(args, config, db):
-    client = get_client(config, args.account)
+    client = get_client(config, getattr(args, 'account', None))
     try:
         # Replace literal "\n" strings with actual newline characters
         # This handles cases where AI passes "Line 1\nLine 2" as a single string argument
@@ -250,7 +281,12 @@ def cmd_send(args, config, db):
         print(json.dumps({"status": "error", "message": str(e)}))
 
 def cmd_mark(args, config, db):
-    email = db.get_email(args.message_id)
+    # Determine the isolated db_path
+    client_init = get_client(config, getattr(args, 'account', None))
+    paths = _get_account_paths(config, client_init.email)
+    isolated_db = MailDatabase(paths['db_path'])
+    
+    email = isolated_db.get_email(args.message_id)
     if not email:
         print(json.dumps({"status": "error", "message": "Email not found locally"}))
         return
@@ -266,19 +302,24 @@ def cmd_mark(args, config, db):
         if args.read is not None:
             is_read = bool(args.read)
             client.mark_as_read(imap_uid, email['folder'], is_read)
-            db.update_flags(args.message_id, is_read=is_read)
+            isolated_db.update_flags(args.message_id, is_read=is_read)
             
         if args.starred is not None:
             is_starred = bool(args.starred)
             client.mark_as_starred(imap_uid, email['folder'], is_starred)
-            db.update_flags(args.message_id, is_starred=is_starred)
+            isolated_db.update_flags(args.message_id, is_starred=is_starred)
             
         print(json.dumps({"status": "success", "message": "Flags updated"}))
     except Exception as e:
         print(json.dumps({"status": "error", "message": str(e)}))
 
 def cmd_move(args, config, db):
-    email = db.get_email(args.message_id)
+    # Determine the isolated db_path
+    client_init = get_client(config, getattr(args, 'account', None))
+    paths = _get_account_paths(config, client_init.email)
+    isolated_db = MailDatabase(paths['db_path'])
+    
+    email = isolated_db.get_email(args.message_id)
     if not email:
         print(json.dumps({"status": "error", "message": "Email not found locally"}))
         return
@@ -292,13 +333,18 @@ def cmd_move(args, config, db):
             return
 
         client.move_emails(imap_uid, args.target_folder, email['folder'])
-        db.update_flags(args.message_id, folder=args.target_folder)
+        isolated_db.update_flags(args.message_id, folder=args.target_folder)
         print(json.dumps({"status": "success", "message": f"Moved to {args.target_folder}"}))
     except Exception as e:
         print(json.dumps({"status": "error", "message": str(e)}))
 
 def cmd_delete(args, config, db):
-    email = db.get_email(args.message_id)
+    # Determine the isolated db_path
+    client_init = get_client(config, getattr(args, 'account', None))
+    paths = _get_account_paths(config, client_init.email)
+    isolated_db = MailDatabase(paths['db_path'])
+    
+    email = isolated_db.get_email(args.message_id)
     if not email:
         print(json.dumps({"status": "error", "message": "Email not found locally"}))
         return
@@ -312,13 +358,18 @@ def cmd_delete(args, config, db):
             return
 
         client.delete_emails(imap_uid, email['folder'])
-        db.delete_email(args.message_id)
+        isolated_db.delete_email(args.message_id)
         print(json.dumps({"status": "success", "message": "Email deleted"}))
     except Exception as e:
         print(json.dumps({"status": "error", "message": str(e)}))
 
 def cmd_export(args, config, db):
-    results = db.search_emails(limit=10000) # Get all
+    # Determine the isolated db_path
+    client = get_client(config, getattr(args, 'account', None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths['db_path'])
+    
+    results = isolated_db.search_emails(limit=10000) # Get all
     if args.format == 'json':
         with open(args.output, 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
@@ -343,6 +394,11 @@ def cmd_export(args, config, db):
     print(json.dumps({"status": "success", "message": f"Exported {len(results)} emails to {args.output}"}))
 
 def cmd_summarize(args, config, db):
+    # Determine the isolated db_path
+    client = get_client(config, getattr(args, 'account', None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths['db_path'])
+    
     # If a task ID is provided, load its fetched IDs to summarize only those
     fetched_ids = []
     if args.task_id:
@@ -353,10 +409,10 @@ def cmd_summarize(args, config, db):
                 fetched_ids = data.get("fetched_ids", [])
     
     if fetched_ids:
-        emails = [db.get_email(msg_id) for msg_id in fetched_ids if db.get_email(msg_id)]
+        emails = [isolated_db.get_email(msg_id) for msg_id in fetched_ids if isolated_db.get_email(msg_id)]
     else:
         # Fallback to recent emails if no task ID or it had no ids
-        emails = db.search_emails(limit=args.limit)
+        emails = isolated_db.search_emails(limit=args.limit)
 
     if not emails:
         print("未找到需要总结的邮件。")

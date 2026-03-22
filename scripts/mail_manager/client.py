@@ -26,42 +26,32 @@ class MailClient:
         use_ssl = str(self.config.get('USE_SSL', 'true')).lower() == 'true' or imap_port == 993
         
         try:
+            print(f"Connecting to {imap_server}:{imap_port} (is_netease={any(domain in imap_server.lower() for domain in ['163.com', '126.com', 'yeah.net'])}, use_ssl={use_ssl})")
+            
+            # Standard connection for all providers
+            mailbox = MailBox(imap_server, port=imap_port)
+            
             # Special handling for Netease (163/126/yeah) mail servers
             # They require an ID command before LOGIN to avoid "Unsafe Login" errors
             is_netease = any(domain in imap_server.lower() for domain in ['163.com', '126.com', 'yeah.net'])
-            
             if is_netease:
-                import ssl
-                # Use standard imaplib to send the ID command first
-                if use_ssl:
-                    ssl_context = ssl.create_default_context()
-                    # Some older Netease servers might need this, but try standard first
-                    # ssl_context.check_hostname = False
-                    # ssl_context.verify_mode = ssl.CERT_NONE
-                    mail = imaplib.IMAP4_SSL(imap_server, imap_port, ssl_context=ssl_context)
-                else:
-                    mail = imaplib.IMAP4(imap_server, imap_port)
-                
-                # Send ID command (simulate a common client like Thunderbird/Foxmail)
-                # Note: imaplib doesn't have a built-in ID command, so we send it raw
-                typ, dat = mail._simple_command('ID', '("name" "PythonMailClient" "version" "1.0")')
-                
-                # Now login
-                mail.login(self.email, self.password)
-                
-                # Wrap the existing connected imaplib client in imap_tools MailBox
-                mailbox = MailBox('')._set_client(mail)
-                return mailbox
-            else:
-                # Standard connection for other providers (Gmail, Outlook, QQ, Aliyun, etc.)
-                if use_ssl:
-                    mailbox = MailBox(imap_server, port=imap_port)
-                else:
-                    mailbox = MailBox(imap_server, port=imap_port)
-                mailbox.login(self.email, self.password)
-                return mailbox
+                try:
+                    mailbox.client._simple_command('ID', '("name" "PythonMailClient" "version" "1.0")')
+                except Exception:
+                    tag = mailbox.client._new_tag()
+                    mailbox.client.send(f'{tag} ID ("name" "PythonMailClient" "version" "1.0")\r\n'.encode())
+                    while True:
+                        line = mailbox.client.readline()
+                        if tag in line:
+                            break
+            
+            # Now login
+            mailbox.login(self.email, self.password)
+            return mailbox
                 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             logger.error(f"Failed to connect to IMAP server {imap_server}: {e}")
             raise
 
