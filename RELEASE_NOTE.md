@@ -1,0 +1,40 @@
+# Mail Skill Release Notes
+
+## v1.1.0 (2026-03-22)
+- **Feature**: **Multi-Account Storage Isolation**. Added support for configuring multiple email accounts simultaneously. Data (EML, JSON, attachments, and SQLite databases) is now strictly isolated into separate folders based on the email address, preventing data mixing.
+- **Bug Fix**: **Netease Mail Compatibility**. Fixed `Unsafe Login` and `[Errno 61] Connection refused` errors when logging into Netease email servers (163.com, 126.com, yeah.net) via IMAP by properly sending the `ID` command before authentication.
+- **Chore**: Excluded internal/draft files (`idea.md`, `163邮箱故障排查指南.md`) from the distribution package to ensure a clean release.
+
+## v1.0.1 (2026-03-21)
+- **Bug Fix**: Fixed an issue where `imap_uid` was not saved to the local database, which caused server-side operations (`move`, `mark`, `delete`) to fail.
+- **Enhancement**: Added automatic folder creation to the `move` command. If the destination folder does not exist on the server, it will be created before moving the email.
+
+## v1.0.0 (2026-03-21)
+
+🎉 **Initial Release: Mail Skill for AI Agents**
+
+This is the first official release of the Mail Skill, designed specifically to empower AI Agents (OpenClaw, Claude Code, Trae, WorkBuddy, OpenCode, etc.) with robust, secure, and intelligent email management capabilities.
+
+### ✨ Key Features
+
+- **Secure Local Storage**:
+  - Emails (EML & JSON) and attachments are downloaded and stored entirely locally.
+  - No third-party servers; your credentials and data remain strictly on your machine.
+- **Comprehensive Email Operations**:
+  - `fetch`: Asynchronously pull emails via IMAP with idempotency (prevents duplicate downloads based on `message_id`).
+  - `search`: Millisecond-level local search via a lightweight SQLite index.
+  - `read`: Access full email body content and attachment paths.
+  - `send`: Send new emails, reply, or forward via SMTP.
+  - `mark` / `move` / `delete`: Manage inbox organization (mark read/unread, star, move to folders, delete).
+- **Intelligent Summarization**:
+  - `summarize`: A built-in command that automatically categorizes fetched emails into a professional Markdown report.
+  - Auto-extracts verification codes, flags important emails, highlights action-required threads, and groups routine notifications.
+- **Agent-Optimized Workflow**:
+  - Async fetching with a progress polling mechanism (`fetch-status`) to prevent Agent timeouts on large mailboxes.
+  - Safety confirmations for bulk operations (e.g., fetching >100 emails).
+  - Included `SKILL.md` perfectly instructs the LLM on how to orchestrate these tools seamlessly.
+
+### 🛠️ Technical Details
+- Built with Python (`imap-tools`, `beautifulsoup4`).
+- Configuration managed via `.env` file (supports multi-account setups).
+- CLI-based architecture (`mail_cli.py`) ensures maximum compatibility across different Agent execution environments.

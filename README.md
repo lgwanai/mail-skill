@@ -11,9 +11,11 @@
   - 使用本地 SQLite 建立索引，检索极速且不再依赖持续的服务器网络请求。
   - 你的邮件数据和账号密码绝不经过任何第三方中间服务器，完全由本地环境掌握。
 - 🚀 **全面且强大的邮件功能**
-  - **收发自如**：支持 IMAP/POP3 收取与 SMTP 发送，支持多账号并行管理。
+  - **收发自如**：支持 IMAP/POP3 收取与 SMTP 发送。
+  - **多账号隔离**：支持配置多个邮箱账号，数据存储在互相独立的文件夹与独立的 SQLite 数据库中，杜绝数据混淆。
+  - **主流邮箱兼容**：深度兼容各类邮箱服务商，包含对网易系（163/126/yeah）的专属底层登录适配，解决 `Unsafe Login` 拦截问题。
   - **智能防重**：基于 `message_id` 的幂等控制，重复收取不会造成数据冗余。
-  - **状态管理**：标记已读/未读、加星标、移动文件夹、删除、导出备份一应俱全。
+  - **状态管理**：标记已读/未读、加星标、移动文件夹、删除、导出备份一应俱全，且能通过 `imap_uid` 完美同步至服务器端。
   - **异步机制**：针对海量邮件收取设计了异步任务，保证 AI Agent 交互不阻塞。
 - 🤖 **专为 AI Agent 设计**
   - **完美兼容**：原生支持并适配市面上各种主流 Agent 工具，如 **OpenClaw、Claude Code、WorkBuddy、OpenCode、Trae** 等。
@@ -69,11 +71,19 @@ AI Agent 使用此技能的标准工作流如下：
 3. **配置账号**：
    - 复制 `example.env` 并重命名为 `.env`。
    - 填入你的邮箱账号、授权码（或密码）、IMAP 和 SMTP 服务器地址。
+   - 支持配置多个账号，只需按照 `MAIL_ACCOUNT_2_`，`MAIL_ACCOUNT_3_` 的前缀继续添加即可。
    ```env
+   # --- Account 1 ---
    MAIL_ACCOUNT_1_EMAIL=your_email@example.com
    MAIL_ACCOUNT_1_PASSWORD=你的授权码
    MAIL_ACCOUNT_1_IMAP_SERVER=imap.example.com
    MAIL_ACCOUNT_1_SMTP_SERVER=smtp.example.com
+   
+   # --- Account 2 ---
+   MAIL_ACCOUNT_2_EMAIL=another_email@example.com
+   MAIL_ACCOUNT_2_PASSWORD=你的授权码
+   MAIL_ACCOUNT_2_IMAP_SERVER=imap.another.com
+   MAIL_ACCOUNT_2_SMTP_SERVER=smtp.another.com
    ```
 4. **导入 Agent**：
    将本目录或生成的 `.skill` 文件挂载/导入到你的 AI Agent 环境中（如 Trae 的 Skill 面板，或 Claude Code 的工具库中），Agent 会自动读取 `SKILL.md` 掌握使用方法。

@@ -5,6 +5,5 @@ mail_data/
 __pycache__/
 *.pyc
 .DS_Store
-RELEASE_NOTE.md
 idea.md
 163邮箱故障排查指南.md
