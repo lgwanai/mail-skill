@@ -1,5 +1,25 @@
 # Mail Skill Release Notes
 
+## [Latest Update] - Advanced Sending, AI Memory & Attachment Packing
+
+### ✨ New Features & Improvements
+
+#### 📧 Enhanced Email Sending & Replying
+- **HTML Email Support**: Added the `--html-body` parameter to the `send` and `reply` commands, allowing the transmission of rich text HTML emails alongside plain text fallbacks.
+- **Dedicated `reply` Command**: Introduced a native `reply` command that automatically sets up `In-Reply-To` and `References` headers to maintain email threads. It supports replying to just the sender or to everyone (`--all`).
+- **Multiple Recipients**: Upgraded the `--to`, `--cc`, and `--bcc` arguments in CLI to accept multiple email addresses (space-separated lists).
+
+#### 🗂️ Smart Attachment Handling
+- **Folder Zipping**: You can now pass folder paths directly to the `--attach` parameter. The system will automatically compress the folder into a `.zip` file before attaching it.
+- **Unified Zip Packing**: Introduced the `--zip-as` parameter. When provided, it takes all specified files and folders, packs them into a single zip archive with the specified name, and attaches that single file to the email.
+
+#### 🧠 AI Persistent Memory Architecture
+- **Isolated Memory Store**: Created a dedicated `references/` directory to store context that the Agent should never forget across sessions.
+- **Contacts & Preferences**: Agent uses `references/MEMORY.md` to memorize and retrieve user preferences and important contact aliases (e.g., "Boss's email").
+- **Signature Management**: Extracted email signatures into a standalone `references/SIGNATURE.md` file. The Agent is now instructed to read this file before sending any email and automatically append the signature to the outgoing message.
+
+---
+
 ## v1.1.0 (2026-03-22)
 - **Feature**: **Multi-Account Storage Isolation**. Added support for configuring multiple email accounts simultaneously. Data (EML, JSON, attachments, and SQLite databases) is now strictly isolated into separate folders based on the email address, preventing data mixing.
 - **Bug Fix**: **Netease Mail Compatibility**. Fixed `Unsafe Login` and `[Errno 61] Connection refused` errors when logging into Netease email servers (163.com, 126.com, yeah.net) via IMAP by properly sending the `ID` command before authentication.

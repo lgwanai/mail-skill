@@ -126,7 +126,7 @@ class MailClient:
             logger.error(f"Error fetching emails: {e}")
             raise
 
-    def send_email(self, to, subject, body_text, html_body=None, cc=None, bcc=None, attachments=None):
+    def send_email(self, to, subject, body_text, html_body=None, cc=None, bcc=None, attachments=None, in_reply_to=None, references=None):
         """Send an email via SMTP"""
         smtp_server = self.config.get('SMTP_SERVER')
         smtp_port = int(self.config.get('SMTP_PORT', 465))
@@ -135,11 +135,29 @@ class MailClient:
         msg = EmailMessage()
         msg['Subject'] = subject
         msg['From'] = self.email
-        msg['To'] = to
+        
+        if in_reply_to:
+            msg['In-Reply-To'] = in_reply_to
+        if references:
+            msg['References'] = references
+        
+        # Handle multiple recipients
+        if isinstance(to, list):
+            msg['To'] = ', '.join(to)
+        else:
+            msg['To'] = to
+            
         if cc:
-            msg['Cc'] = cc
+            if isinstance(cc, list):
+                msg['Cc'] = ', '.join(cc)
+            else:
+                msg['Cc'] = cc
+                
         if bcc:
-            msg['Bcc'] = bcc
+            if isinstance(bcc, list):
+                msg['Bcc'] = ', '.join(bcc)
+            else:
+                msg['Bcc'] = bcc
             
         if html_body:
             msg.set_content(body_text)

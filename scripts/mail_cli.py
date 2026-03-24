@@ -8,6 +8,8 @@ import threading
 import time
 import uuid
 import re
+import zipfile
+import tempfile
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -70,6 +72,56 @@ def get_client(config, email_account=None):
         account_config = list(config['ACCOUNTS'].values())[0]
         
     return MailClient(account_config)
+
+def _process_attachments(attach_paths, zip_as=None):
+    """Process attachments: zip folders, or pack everything into one zip file."""
+    if not attach_paths:
+        return None
+        
+    final_attachments = []
+    temp_dir = tempfile.mkdtemp()
+    
+    if zip_as:
+        if not zip_as.endswith('.zip'):
+            zip_as += '.zip'
+        zip_path = os.path.join(temp_dir, zip_as)
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for path in attach_paths:
+                if not os.path.exists(path):
+                    logger.warning(f"Attachment path not found: {path}")
+                    continue
+                abs_path = os.path.abspath(path)
+                if os.path.isfile(abs_path):
+                    zipf.write(abs_path, arcname=os.path.basename(abs_path))
+                elif os.path.isdir(abs_path):
+                    parent_dir = os.path.dirname(abs_path)
+                    for root, dirs, files in os.walk(abs_path):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            rel_path = os.path.relpath(file_path, parent_dir)
+                            zipf.write(file_path, arcname=rel_path)
+        final_attachments.append(zip_path)
+    else:
+        for path in attach_paths:
+            if not os.path.exists(path):
+                logger.warning(f"Attachment path not found: {path}")
+                continue
+            abs_path = os.path.abspath(path)
+            if os.path.isfile(abs_path):
+                final_attachments.append(abs_path)
+            elif os.path.isdir(abs_path):
+                dir_name = os.path.basename(abs_path) or "folder"
+                zip_path = os.path.join(temp_dir, f"{dir_name}.zip")
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    parent_dir = os.path.dirname(abs_path)
+                    for root, dirs, files in os.walk(abs_path):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            rel_path = os.path.relpath(file_path, parent_dir)
+                            zipf.write(file_path, arcname=rel_path)
+                final_attachments.append(zip_path)
+                
+    return final_attachments
 
 def _get_account_paths(config, email_address):
     """Generate isolated storage paths for a specific email account"""
@@ -268,15 +320,101 @@ def cmd_send(args, config, db):
         # Replace literal "\n" strings with actual newline characters
         # This handles cases where AI passes "Line 1\nLine 2" as a single string argument
         body_text = args.body.replace('\\n', '\n')
+        html_body = getattr(args, 'html_body', None)
+        if html_body:
+            html_body = html_body.replace('\\n', '\n')
+        
+        attachments = _process_attachments(args.attach, getattr(args, 'zip_as', None))
         
         client.send_email(
             to=args.to,
             subject=args.subject,
             body_text=body_text,
+            html_body=html_body,
             cc=args.cc,
-            attachments=args.attach
+            bcc=args.bcc,
+            attachments=attachments
         )
         print(json.dumps({"status": "success", "message": "Email sent"}))
+    except Exception as e:
+        print(json.dumps({"status": "error", "message": str(e)}))
+
+def cmd_reply(args, config, db):
+    import email.utils
+    client = get_client(config, getattr(args, 'account', None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths['db_path'])
+    
+    orig_email = isolated_db.get_email(args.message_id)
+    if not orig_email:
+        print(json.dumps({"status": "error", "message": "Email not found locally"}))
+        return
+        
+    my_email = client.email.lower()
+    
+    orig_sender = orig_email.get('sender', '')
+    orig_to = orig_email.get('recipient', '')
+    orig_cc = orig_email.get('cc', '')
+    
+    sender_addrs = email.utils.getaddresses([orig_sender]) if orig_sender else []
+    to_addrs = email.utils.getaddresses([orig_to]) if orig_to else []
+    cc_addrs = email.utils.getaddresses([orig_cc]) if orig_cc else []
+    
+    reply_to_addrs = []
+    # Always reply to the original sender
+    for name, addr in sender_addrs:
+        if addr and addr.lower() != my_email:
+            reply_to_addrs.append(email.utils.formataddr((name, addr)))
+            
+    # Fallback if we sent the original email to someone else
+    if not reply_to_addrs:
+        for name, addr in to_addrs:
+            if addr and addr.lower() != my_email:
+                reply_to_addrs.append(email.utils.formataddr((name, addr)))
+
+    reply_cc_addrs = []
+    if args.all:
+        # Add other original 'To' recipients to our 'To' list
+        for name, addr in to_addrs:
+            fmt = email.utils.formataddr((name, addr))
+            if addr and addr.lower() != my_email and fmt not in reply_to_addrs:
+                reply_to_addrs.append(fmt)
+        # Add original 'Cc' recipients to our 'Cc' list
+        for name, addr in cc_addrs:
+            fmt = email.utils.formataddr((name, addr))
+            if addr and addr.lower() != my_email and fmt not in reply_to_addrs and fmt not in reply_cc_addrs:
+                reply_cc_addrs.append(fmt)
+                
+    subject = orig_email.get('subject', '')
+    if not subject.lower().startswith('re:'):
+        subject = 'Re: ' + subject
+        
+    orig_msg_id = orig_email.get('message_id')
+    
+    try:
+        body_text = args.body.replace('\\n', '\n')
+        html_body = getattr(args, 'html_body', None)
+        if html_body:
+            html_body = html_body.replace('\\n', '\n')
+            
+        attachments = _process_attachments(args.attach, getattr(args, 'zip_as', None))
+            
+        client.send_email(
+            to=reply_to_addrs,
+            subject=subject,
+            body_text=body_text,
+            html_body=html_body,
+            cc=reply_cc_addrs if reply_cc_addrs else None,
+            attachments=attachments,
+            in_reply_to=orig_msg_id,
+            references=orig_msg_id
+        )
+        print(json.dumps({
+            "status": "success", 
+            "message": "Reply sent",
+            "to": reply_to_addrs,
+            "cc": reply_cc_addrs
+        }))
     except Exception as e:
         print(json.dumps({"status": "error", "message": str(e)}))
 
@@ -539,11 +677,24 @@ def main():
     # send
     send_p = subparsers.add_parser("send", help="Send an email")
     send_p.add_argument("--account", help="Account to send from")
-    send_p.add_argument("--to", required=True, help="Recipient email")
+    send_p.add_argument("--to", required=True, nargs="+", help="Recipient email(s)")
     send_p.add_argument("--subject", required=True, help="Email subject")
     send_p.add_argument("--body", required=True, help="Email body text")
-    send_p.add_argument("--cc", help="CC email addresses")
-    send_p.add_argument("--attach", nargs="+", help="Paths to attachments")
+    send_p.add_argument("--html-body", help="Email body in HTML format")
+    send_p.add_argument("--cc", nargs="+", help="CC email address(es)")
+    send_p.add_argument("--bcc", nargs="+", help="BCC email address(es)")
+    send_p.add_argument("--attach", nargs="+", help="Paths to attachments (files or folders)")
+    send_p.add_argument("--zip-as", help="Pack all attachments into a single zip file with this name")
+    
+    # reply
+    reply_p = subparsers.add_parser("reply", help="Reply to an email")
+    reply_p.add_argument("message_id", help="Message ID to reply to")
+    reply_p.add_argument("--account", help="Account to send from")
+    reply_p.add_argument("--body", required=True, help="Email body text")
+    reply_p.add_argument("--html-body", help="Email body in HTML format")
+    reply_p.add_argument("--all", action="store_true", help="Reply to all (senders and CCs)")
+    reply_p.add_argument("--attach", nargs="+", help="Paths to attachments (files or folders)")
+    reply_p.add_argument("--zip-as", help="Pack all attachments into a single zip file with this name")
     
     # mark
     mark_p = subparsers.add_parser("mark", help="Mark email as read/starred")
@@ -589,6 +740,8 @@ def main():
         cmd_read(args, config, db)
     elif args.command == "send":
         cmd_send(args, config, db)
+    elif args.command == "reply":
+        cmd_reply(args, config, db)
     elif args.command == "mark":
         cmd_mark(args, config, db)
     elif args.command == "move":
