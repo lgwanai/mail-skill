@@ -1,6 +1,23 @@
 # Mail Skill Release Notes
 
-## [Latest Update] - Advanced Sending, AI Memory & Attachment Packing
+## [Latest Update] - FTS5 Search, Thread Timeline & Markdown Rendering
+
+### ✨ New Features & Improvements
+
+#### 🔍 FTS5 Full-Text Search
+- **SQLite FTS5 Integration**: Upgraded the local storage engine to use SQLite's FTS5 virtual tables. This provides lightning-fast, millisecond-level full-text search across email subjects, senders, and body content without relying on external indexing services.
+
+#### 🧵 Email Thread Timeline
+- **Conversation Tracking**: The fetch engine now parses and saves `In-Reply-To` and `References` headers.
+- **New `thread` Command**: Introduced a dedicated CLI command to build and trace the complete lifecycle of a conversation (e.g., A replies to B, C replies to A). This constructs a chronological timeline of the entire email thread.
+
+#### 🎨 Vertical Card Rendering
+- **Jinja2 Templates**: Integrated the Jinja2 template engine to format CLI outputs.
+- **Chat-Friendly Display**: The `read` and `thread` commands now output structured, vertical Markdown tables (cards). This includes clear fields for Sender, Recipient, CC, Date, Subject, Snippet, and Attachments, significantly improving readability within AI chat interfaces.
+
+---
+
+## v1.2.0 (2026-03-24) - Advanced Sending, AI Memory & Attachment Packing
 
 ### ✨ New Features & Improvements
 
