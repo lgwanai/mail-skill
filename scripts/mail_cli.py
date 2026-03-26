@@ -12,6 +12,7 @@ import zipfile
 import tempfile
 from datetime import datetime
 from dotenv import load_dotenv
+from jinja2 import Environment, FileSystemLoader
 
 # Ensure the parent directory is in sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -138,6 +139,16 @@ def _get_account_paths(config, email_address):
         'json_path': os.path.join(account_root, 'json'),
         'signature_path': os.path.join(account_root, 'signature.md')
     }
+
+def _get_template_env():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tpl_dir = os.path.join(root, 'references', 'templates')
+    return Environment(loader=FileSystemLoader(tpl_dir), autoescape=False)
+
+def _render_table(template_name, context):
+    env = _get_template_env()
+    tpl = env.get_template(template_name)
+    return tpl.render(**context)
 
 def _run_fetch_task(task_id, config, db_path, args):
     # Ensure this runs in a completely separate process to avoid thread killing issues
@@ -275,16 +286,33 @@ def cmd_search(args, config, db):
     paths = _get_account_paths(config, client.email)
     isolated_db = MailDatabase(paths['db_path'])
     
-    results = isolated_db.search_emails(
-        query=args.query,
-        account=args.account,
-        folder=args.folder,
-        sender=args.sender,
-        subject=args.subject,
-        is_read=args.is_read,
-        has_attachment=args.has_attachment,
-        limit=args.limit
-    )
+    if args.query:
+        results = isolated_db.search_fts(args.query, limit=args.limit)
+        filtered = []
+        for r in results:
+            if args.folder and r.get('folder') != args.folder:
+                continue
+            if args.sender and args.sender not in (r.get('sender') or ''):
+                continue
+            if args.subject and args.subject not in (r.get('subject') or ''):
+                continue
+            if args.is_read is not None and int(bool(r.get('is_read'))) != int(args.is_read):
+                continue
+            if args.has_attachment is not None and int(bool(r.get('has_attachment'))) != int(args.has_attachment):
+                continue
+            filtered.append(r)
+        results = filtered
+    else:
+        results = isolated_db.search_emails(
+            query=None,
+            account=args.account,
+            folder=args.folder,
+            sender=args.sender,
+            subject=args.subject,
+            is_read=args.is_read,
+            has_attachment=args.has_attachment,
+            limit=args.limit
+        )
     
     # Format output
     output = []
@@ -312,8 +340,18 @@ def cmd_read(args, config, db):
     if not email:
         print(json.dumps({"status": "error", "message": "Email not found locally"}))
         return
-        
-    print(json.dumps({"status": "success", "email": email}, ensure_ascii=False, indent=2))
+    table_md = _render_table('email_table.md.j2', {
+        "rows": [{
+            "sender": email.get('sender', ''),
+            "recipient": email.get('recipient', ''),
+            "cc": email.get('cc', ''),
+            "date": email.get('date', ''),
+            "subject": email.get('subject', ''),
+            "snippet": (email.get('body_text', '') or '')[:200].replace('\n', ' ').replace('\r', ''),
+            "attachments": [att.get('local_path') for att in email.get('attachments', [])]
+        }]
+    })
+    print(table_md)
 
 def _append_signature(body_text, html_body, signature_path):
     """Append signature to the email body if the signature file exists and is not empty."""
@@ -679,6 +717,28 @@ def cmd_summarize(args, config, db):
     
     print("\n".join(report))
 
+def cmd_thread(args, config, db):
+    client = get_client(config, getattr(args, 'account', None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths['db_path'])
+    timeline = isolated_db.get_thread_timeline(args.message_id, limit=200)
+    if not timeline:
+        print("未找到关联邮件线程。")
+        return
+    rows = []
+    for e in timeline:
+        rows.append({
+            "sender": e.get('sender', ''),
+            "recipient": e.get('recipient', ''),
+            "cc": e.get('cc', ''),
+            "date": e.get('date', ''),
+            "subject": e.get('subject', ''),
+            "snippet": (e.get('body_text', '') or '')[:200].replace('\n', ' ').replace('\r', ''),
+            "attachments": [att.get('local_path') for att in e.get('attachments', [])]
+        })
+    table_md = _render_table('thread.md.j2', {"rows": rows})
+    print(table_md)
+
 def main():
     parser = argparse.ArgumentParser(description="Mail Manager CLI")
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
@@ -710,6 +770,7 @@ def main():
     # read
     read_p = subparsers.add_parser("read", help="Read a specific email by message_id")
     read_p.add_argument("message_id", help="Message ID to read")
+    read_p.add_argument("--account", help="Account to read from")
     
     # send
     send_p = subparsers.add_parser("send", help="Send an email")
@@ -758,6 +819,11 @@ def main():
     sum_p.add_argument("--task-id", help="Summarize emails from a specific fetch task ID")
     sum_p.add_argument("--limit", type=int, default=10, help="Number of recent emails to summarize if no task-id is provided")
     
+    # thread
+    thread_p = subparsers.add_parser("thread", help="Show email thread timeline as a table")
+    thread_p.add_argument("message_id", help="Seed message_id to build the thread")
+    thread_p.add_argument("--account", help="Account to read from")
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -789,6 +855,8 @@ def main():
         cmd_export(args, config, db)
     elif args.command == "summarize":
         cmd_summarize(args, config, db)
+    elif args.command == "thread":
+        cmd_thread(args, config, db)
 
 if __name__ == "__main__":
     main()

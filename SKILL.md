@@ -8,14 +8,14 @@ description: Comprehensive email management skill. Use this skill when the user 
 This skill provides a robust command-line interface (`scripts/mail_cli.py`) for managing emails across multiple accounts.
 
 ## Core Capabilities
-- **Fetch**: Retrieve emails via IMAP and save them locally (.eml, .json, and SQLite index). Skips already downloaded emails based on `message_id`.
-- **Search**: Query the local database for fast retrieval based on sender, subject, content, and date.
-- **Read**: View the full content of an email, including its text and attachment metadata.
+- **Fetch**: Retrieve emails via IMAP and save them locally (.eml, .json, and SQLite index). Skips already downloaded emails based on `message_id`. Extracts `In-Reply-To` and `References` for thread building.
+- **Search (FTS5)**: Query the local database using SQLite FTS5 for fast full-text retrieval based on sender, subject, and body content.
+- **Read**: View the full content of an email, rendered via Jinja2 into a clean vertical Markdown card, including its text and attachment metadata.
+- **Thread Timeline**: Use the `thread` command to build and display a full conversation timeline (A→B→C→D) based on email references, rendered vertically for easy chat-interface reading.
 - **Send/Reply/Forward**: Send new emails or reply/forward existing ones via SMTP.
 - **Manage**: Mark as read/starred, move between folders, or delete emails.
 - **Summarize**: Since the skill provides full email text, you (Claude/Trae) can use your own intelligence to summarize the content, extract to-dos, or identify key dates.
 - **Set Signature**: Manage and store the user's email signature persistently per account in `mail_data/<email>/signature.md`. The CLI will automatically append it to outgoing emails.
-- **Update Skill**: Automatically update the mail-skill code from its GitHub repository without overwriting user data or configs.
 
 ## Workflow
 
@@ -58,12 +58,18 @@ Search locally first. This is much faster and doesn't hit the server:
 ```
 
 ### 5. Reading an Email
-To read the full text and get attachment info, use the `message_id` from the search results:
+To read the full text and get attachment info, use the `message_id` from the search results. The output is formatted as a vertical Markdown table for easy reading in chat interfaces:
 ```bash
-./scripts/mail_cli.py read "<message_id>"
+./scripts/mail_cli.py read "<message_id>" --account "<email_account>"
 ```
 
-### 6. Sending Emails
+### 6. Viewing an Email Thread
+To view the full context of a conversation (A→B→C→D) based on a specific email, use the `thread` command. It traces `In-Reply-To` and `References` headers and outputs a chronological vertical table:
+```bash
+./scripts/mail_cli.py thread "<message_id>" --account "<email_account>"
+```
+
+### 7. Sending Emails
 ```bash
 ./scripts/mail_cli.py send --to "recipient@example.com" --subject "Hello" --body "Message body" --attach "path/to/file1.txt" "path/to/folder1"
 ```
@@ -76,18 +82,18 @@ To pack multiple files and/or folders into a single zip file before sending, use
 ./scripts/mail_cli.py send --to "recipient@example.com" --subject "Docs" --body "Here are the files" --attach "file1.txt" "folder2" --zip-as "project_docs.zip"
 ```
 
-### 7. Managing Emails
-- **Mark**: `./scripts/mail_cli.py mark "<message_id>" --read 1 --starred 1`
-- **Move**: `./scripts/mail_cli.py move "<message_id>" "Archive"`
-- **Delete**: `./scripts/mail_cli.py delete "<message_id>"`
+### 8. Managing Emails
+- **Mark**: `./scripts/mail_cli.py mark "<message_id>" --read 1 --starred 1 --account "<email_account>"`
+- **Move**: `./scripts/mail_cli.py move "<message_id>" "Archive" --account "<email_account>"`
+- **Delete**: `./scripts/mail_cli.py delete "<message_id>" --account "<email_account>"`
 
-### 8. Exporting
+### 9. Exporting
 Export local database for analysis:
 ```bash
-./scripts/mail_cli.py export --format csv --output emails.csv
+./scripts/mail_cli.py export --format csv --output emails.csv --account "<email_account>"
 ```
 
-### 9. Managing Email Signatures
+### 10. Managing Email Signatures
 When the user asks you to "set my email signature", "save this signature", or "use this as my signature":
 1. First, determine which account they are referring to. If they don't specify, ask them or check `.env` / `references/MEMORY.md` for the default account.
 2. The signature file for an account MUST be stored at `mail_data/<safe_email_address>/signature.md` (where `<safe_email_address>` replaces `@` with `_at_`, `.` with `_`, and removes any other special characters except `-` and `_`). For example, `test@example.com` becomes `test_at_example_com`.
@@ -95,19 +101,7 @@ When the user asks you to "set my email signature", "save this signature", or "u
 4. Save the exact signature content into the file.
 5. Confirm to the user that their signature has been saved for that specific account and will be automatically used by the CLI in future emails.
 
-### 10. Updating the Skill
-When the user asks to "update the mail-skill plugin" or "update mail-skill":
-1. Clone the latest repository into a temporary directory:
-   `git clone https://github.com/lgwanai/mail-skill.git /tmp/mail-skill-update`
-2. Copy the updated code and documentation files to the current workspace, ensuring you DO NOT overwrite `.env`, `mail_data/`, or `references/` directories.
-   `cp -rf /tmp/mail-skill-update/scripts ./`
-   `cp -f /tmp/mail-skill-update/SKILL.md ./`
-   `cp -f /tmp/mail-skill-update/README.md ./`
-   `cp -f /tmp/mail-skill-update/RELEASE_NOTE.md ./`
-   `cp -f /tmp/mail-skill-update/requirements.txt ./`
-3. Clean up the temporary directory:
-   `rm -rf /tmp/mail-skill-update`
-4. Confirm to the user that the skill code has been successfully updated while their data and configurations remain untouched.
+
 
 ## Best Practices
 - **Always Search Local First**: Do not fetch unless the user explicitly asks to "check for new emails" or if a local search yields no results.

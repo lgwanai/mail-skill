@@ -27,7 +27,9 @@ class MailDatabase:
                     imap_uid TEXT,
                     account TEXT,
                     thread_id TEXT,
-                    subject TEXT,
+                    in_reply_to TEXT,
+                "references" TEXT,
+                subject TEXT,
                     sender TEXT,
                     recipient TEXT,
                     cc TEXT,
@@ -44,11 +46,15 @@ class MailDatabase:
                 )
             ''')
             
-            # Migration: add imap_uid if it doesn't exist
+            # Migration: add columns if they don't exist
             cursor.execute("PRAGMA table_info(emails)")
             columns = [col[1] for col in cursor.fetchall()]
             if 'imap_uid' not in columns:
                 cursor.execute("ALTER TABLE emails ADD COLUMN imap_uid TEXT")
+            if 'in_reply_to' not in columns:
+                cursor.execute("ALTER TABLE emails ADD COLUMN in_reply_to TEXT")
+            if '"references"' not in columns and 'references' not in columns:
+                cursor.execute('ALTER TABLE emails ADD COLUMN "references" TEXT')
 
             
             cursor.execute('''
@@ -69,6 +75,37 @@ class MailDatabase:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_date ON emails(date)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_sender ON emails(sender)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_subject ON emails(subject)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_in_reply_to ON emails(in_reply_to)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_references ON emails("references")')
+            
+            # Create FTS5 virtual table for full-text search
+            try:
+                cursor.execute('''
+                    CREATE VIRTUAL TABLE IF NOT EXISTS emails_fts USING fts5(
+                        subject, body_text, sender, recipient, cc,
+                        content='emails', content_rowid='id'
+                    )
+                ''')
+                # Triggers to keep FTS in sync
+                cursor.execute('''
+                    CREATE TRIGGER IF NOT EXISTS emails_ai AFTER INSERT ON emails BEGIN
+                        INSERT INTO emails_fts(rowid, subject, body_text, sender, recipient, cc)
+                        VALUES (new.id, new.subject, new.body_text, new.sender, new.recipient, new.cc);
+                    END;
+                ''')
+                cursor.execute('''
+                    CREATE TRIGGER IF NOT EXISTS emails_au AFTER UPDATE ON emails BEGIN
+                        UPDATE emails_fts SET subject=new.subject, body_text=new.body_text, sender=new.sender, recipient=new.recipient, cc=new.cc
+                        WHERE rowid=new.id;
+                    END;
+                ''')
+                cursor.execute('''
+                    CREATE TRIGGER IF NOT EXISTS emails_ad AFTER DELETE ON emails BEGIN
+                        DELETE FROM emails_fts WHERE rowid=old.id;
+                    END;
+                ''')
+            except sqlite3.OperationalError:
+                pass
             conn.commit()
 
     def exists(self, message_id):
@@ -87,12 +124,14 @@ class MailDatabase:
             
             cursor.execute('''
                 INSERT INTO emails (
-                    message_id, imap_uid, account, thread_id, subject, sender, recipient, cc, 
+                    message_id, imap_uid, account, thread_id, in_reply_to, "references", subject, sender, recipient, cc, 
                     date, body_text, has_attachment, is_read, is_starred, labels, folder, 
                     local_path_eml, local_path_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(message_id) DO UPDATE SET
                     imap_uid=excluded.imap_uid,
+                    in_reply_to=excluded.in_reply_to,
+                    "references"=excluded."references",
                     is_read=excluded.is_read,
                     is_starred=excluded.is_starred,
                     labels=excluded.labels,
@@ -102,6 +141,8 @@ class MailDatabase:
                 email_data.get('imap_uid'),
                 email_data.get('account'),
                 email_data.get('thread_id'),
+                email_data.get('in_reply_to'),
+                email_data.get('references'),
                 email_data.get('subject', ''),
                 email_data.get('sender', ''),
                 email_data.get('recipient', ''),
@@ -136,6 +177,74 @@ class MailDatabase:
             
             conn.commit()
             
+    def search_fts(self, query, limit=100, offset=0):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT e.* FROM emails_fts f
+                JOIN emails e ON e.id = f.rowid
+                WHERE emails_fts MATCH ?
+                ORDER BY e.date DESC LIMIT ? OFFSET ?
+            ''', (query, limit, offset))
+            rows = cursor.fetchall()
+            result = []
+            for row in rows:
+                email_dict = dict(row)
+                email_dict['labels'] = json.loads(email_dict['labels']) if email_dict['labels'] else []
+                cursor.execute('SELECT * FROM attachments WHERE message_id = ?', (email_dict['message_id'],))
+                att_rows = cursor.fetchall()
+                email_dict['attachments'] = [dict(att) for att in att_rows]
+                result.append(email_dict)
+            return result
+
+    def get_thread_timeline(self, seed_message_id, limit=100):
+        def norm(mid):
+            if not mid:
+                return ''
+            m = mid.strip()
+            if m.startswith('<') and m.endswith('>'):
+                m = m[1:-1]
+            return m.strip()
+        seed_norm = norm(seed_message_id)
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM emails WHERE message_id = ? OR message_id = ?', (seed_message_id, seed_norm))
+            base_row = cursor.fetchone()
+            if not base_row:
+                return []
+            base = dict(base_row)
+            ids = set([norm(base['message_id'])])
+            timeline = [base]
+            visited = set([base['message_id']])
+            while True:
+                found_new = False
+                q_marks = ','.join(['?'] * len(ids)) if ids else '?'
+                params = list(ids) if ids else [seed_norm]
+                cursor.execute(f'''
+                    SELECT * FROM emails 
+                    WHERE in_reply_to IN ({q_marks})
+                       OR "references" LIKE '%' || ? || '%'
+                    ORDER BY date ASC
+                    LIMIT ?
+                ''', (*params, seed_norm, limit))
+                rows = cursor.fetchall()
+                for r in rows:
+                    em = dict(r)
+                    if em['message_id'] in visited:
+                        continue
+                    timeline.append(em)
+                    visited.add(em['message_id'])
+                    ids.add(norm(em.get('message_id')))
+                    found_new = True
+                if not found_new or len(timeline) >= limit:
+                    break
+            timeline.sort(key=lambda x: x.get('date') or '')
+            for i in range(len(timeline)):
+                cursor.execute('SELECT * FROM attachments WHERE message_id = ?', (timeline[i]['message_id'],))
+                att_rows = cursor.fetchall()
+                timeline[i]['attachments'] = [dict(att) for att in att_rows]
+            return timeline
+
     def search_emails(self, query=None, account=None, folder=None, sender=None, 
                       subject=None, date_from=None, date_to=None, has_attachment=None,
                       is_read=None, limit=100, offset=0):

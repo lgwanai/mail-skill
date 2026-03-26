@@ -98,6 +98,20 @@ class MailClient:
                         # Usually msg.uid is what we want for IMAP operations, but message-id is better for global DB
                         # imap_tools uses headers for message-id
                         msg_id_header = msg.headers.get('message-id', ('',))[0] if isinstance(msg.headers.get('message-id'), tuple) else msg.headers.get('message-id', '')
+                        in_reply_to_header = msg.headers.get('in-reply-to', ('',))[0] if isinstance(msg.headers.get('in-reply-to'), tuple) else msg.headers.get('in-reply-to', '')
+                        references_header = msg.headers.get('references', ('',))[0] if isinstance(msg.headers.get('references'), tuple) else msg.headers.get('references', '')
+                        import re
+                        refs = []
+                        if references_header:
+                            refs = re.findall(r'<([^>]+)>', references_header)
+                            if not refs:
+                                refs = [x.strip() for x in references_header.split() if x.strip()]
+                        in_reply_to_norm = ''
+                        if in_reply_to_header:
+                            m = in_reply_to_header.strip()
+                            if m.startswith('<') and m.endswith('>'):
+                                m = m[1:-1]
+                            in_reply_to_norm = m
                         global_msg_id = msg_id_header if msg_id_header else f"{self.email}-{current_folder}-{msg.uid}"
                         
                         if db_check_func and db_check_func(global_msg_id):
@@ -115,6 +129,8 @@ class MailClient:
                             'imap_uid': msg.uid, # Need this for IMAP operations like mark read/delete
                             'account': self.email,
                             'thread_id': msg.headers.get('thread-index', ('',))[0] if isinstance(msg.headers.get('thread-index'), tuple) else msg.headers.get('thread-index', ''),
+                            'in_reply_to': in_reply_to_norm,
+                            'references': ','.join(refs) if refs else '',
                             'subject': msg.subject,
                             'sender': msg.from_,
                             'recipient': ', '.join(msg.to),

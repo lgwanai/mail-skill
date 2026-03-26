@@ -1,0 +1,16 @@
+{% for r in rows -%}
+主题：{{ r.subject }}
+时间：{{ r.date }}
+发件人：{{ r.sender }}
+收件人：{{ r.recipient or '无' }}
+抄送：{{ r.cc or '无' }}
+摘要：{{ r.snippet }}
+附件：
+{% if r.attachments and r.attachments|length > 0 -%}
+{% for a in r.attachments %}- {{ a }}
+{% endfor -%}
+{% else -%}
+- 无
+{% endif -%}
+---
+{% endfor -%}
