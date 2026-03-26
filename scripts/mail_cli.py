@@ -649,8 +649,8 @@ def main():
     # fetch
     fetch_p = subparsers.add_parser("fetch", help="Fetch emails from server asynchronously")
     fetch_p.add_argument("--account", help="Email account to use")
-    fetch_p.add_argument("--folder", default="INBOX", help="Folder to fetch from")
-    fetch_p.add_argument("--limit", type=int, default=50, help="Max emails to fetch")
+    fetch_p.add_argument("--folder", default="INBOX", help="Folder to fetch from. Use 'ALL' to fetch from all folders, or comma-separated names like 'INBOX,Sent'")
+    fetch_p.add_argument("--limit", type=int, default=50, help="Max emails to fetch per folder")
     fetch_p.add_argument("--days", type=int, default=7, help="Fetch emails from last N days")
     fetch_p.add_argument("--unread", action="store_true", help="Fetch only unread emails")
     fetch_p.add_argument("--confirm", action="store_true", help="Confirm fetching more than 100 emails")

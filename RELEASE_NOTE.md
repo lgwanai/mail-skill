@@ -4,7 +4,8 @@
 
 ### ✨ New Features & Improvements
 
-#### 📧 Enhanced Email Sending & Replying
+#### 📧 Enhanced Email Fetching & Sending
+- **Multi-Folder Fetching**: Fixed an issue where only the `INBOX` was fetched. You can now use `--folder ALL` to fetch emails from all server directories (crucial for users with server-side routing rules) or pass a comma-separated list of folders (e.g., `--folder "INBOX,Sent"`). The fetch limit now applies per folder.
 - **HTML Email Support**: Added the `--html-body` parameter to the `send` and `reply` commands, allowing the transmission of rich text HTML emails alongside plain text fallbacks.
 - **Dedicated `reply` Command**: Introduced a native `reply` command that automatically sets up `In-Reply-To` and `References` headers to maintain email threads. It supports replying to just the sender or to everyone (`--all`).
 - **Multiple Recipients**: Upgraded the `--to`, `--cc`, and `--bcc` arguments in CLI to accept multiple email addresses (space-separated lists).

@@ -63,64 +63,75 @@ class MailClient:
         results = []
         try:
             with self._get_mailbox() as mailbox:
-                mailbox.folder.set(folder)
-                
-                # Build search criteria
-                criteria = []
-                if unread_only:
-                    criteria.append(A(seen=False))
-                if since_date:
-                    criteria.append(A(date_gte=since_date))
-                elif days_back:
-                    from datetime import datetime, timedelta
-                    d = (datetime.now() - timedelta(days=days_back)).date()
-                    criteria.append(A(date_gte=d))
-                    
-                if not criteria:
-                    search_criteria = A(all=True)
+                folders_to_fetch = []
+                if folder.upper() == 'ALL':
+                    folders_to_fetch = [f.name for f in mailbox.folder.list()]
                 else:
-                    search_criteria = A(*criteria) if len(criteria) > 1 else criteria[0]
-                
-                # We iterate in reverse order to get newest first
-                # imap_tools doesn't support reverse directly in fetch, we can use reverse=True
-                for msg in mailbox.fetch(search_criteria, limit=limit, reverse=True, mark_seen=False):
-                    # Usually msg.uid is what we want for IMAP operations, but message-id is better for global DB
-                    # imap_tools uses headers for message-id
-                    msg_id_header = msg.headers.get('message-id', ('',))[0] if isinstance(msg.headers.get('message-id'), tuple) else msg.headers.get('message-id', '')
-                    global_msg_id = msg_id_header if msg_id_header else f"{self.email}-{folder}-{msg.uid}"
+                    folders_to_fetch = [f.strip() for f in folder.split(',')]
                     
-                    if db_check_func and db_check_func(global_msg_id):
-                        logger.debug(f"Message {global_msg_id} already exists locally, skipping.")
+                for current_folder in folders_to_fetch:
+                    try:
+                        mailbox.folder.set(current_folder)
+                    except Exception as e:
+                        logger.warning(f"Could not set folder {current_folder}: {e}")
                         continue
                         
-                    # Parse body text
-                    body_text = msg.text or ''
-                    if not body_text and msg.html:
-                        soup = BeautifulSoup(msg.html, 'html.parser')
-                        body_text = soup.get_text(separator='\n', strip=True)
+                    # Build search criteria
+                    criteria = []
+                    if unread_only:
+                        criteria.append(A(seen=False))
+                    if since_date:
+                        criteria.append(A(date_gte=since_date))
+                    elif days_back:
+                        from datetime import datetime, timedelta
+                        d = (datetime.now() - timedelta(days=days_back)).date()
+                        criteria.append(A(date_gte=d))
                         
-                    email_data = {
-                        'message_id': global_msg_id,
-                        'imap_uid': msg.uid, # Need this for IMAP operations like mark read/delete
-                        'account': self.email,
-                        'thread_id': msg.headers.get('thread-index', ('',))[0] if isinstance(msg.headers.get('thread-index'), tuple) else msg.headers.get('thread-index', ''),
-                        'subject': msg.subject,
-                        'sender': msg.from_,
-                        'recipient': ', '.join(msg.to),
-                        'cc': ', '.join(msg.cc),
-                        'date': msg.date,
-                        'body_text': body_text,
-                        'html_body': msg.html,
-                        'has_attachment': len(msg.attachments) > 0,
-                        'is_read': 'SEEN' in [flag.upper() for flag in msg.flags],
-                        'is_starred': 'FLAGGED' in [flag.upper() for flag in msg.flags],
-                        'labels': msg.flags,
-                        'folder': folder,
-                        'raw_email': msg.obj, # email.message.Message object
-                        'attachments': msg.attachments
-                    }
-                    results.append(email_data)
+                    if not criteria:
+                        search_criteria = A(all=True)
+                    else:
+                        search_criteria = A(*criteria) if len(criteria) > 1 else criteria[0]
                     
+                    # We iterate in reverse order to get newest first
+                    # imap_tools doesn't support reverse directly in fetch, we can use reverse=True
+                    for msg in mailbox.fetch(search_criteria, limit=limit, reverse=True, mark_seen=False):
+                        # Usually msg.uid is what we want for IMAP operations, but message-id is better for global DB
+                        # imap_tools uses headers for message-id
+                        msg_id_header = msg.headers.get('message-id', ('',))[0] if isinstance(msg.headers.get('message-id'), tuple) else msg.headers.get('message-id', '')
+                        global_msg_id = msg_id_header if msg_id_header else f"{self.email}-{current_folder}-{msg.uid}"
+                        
+                        if db_check_func and db_check_func(global_msg_id):
+                            logger.debug(f"Message {global_msg_id} already exists locally, skipping.")
+                            continue
+                            
+                        # Parse body text
+                        body_text = msg.text or ''
+                        if not body_text and msg.html:
+                            soup = BeautifulSoup(msg.html, 'html.parser')
+                            body_text = soup.get_text(separator='\n', strip=True)
+                            
+                        email_data = {
+                            'message_id': global_msg_id,
+                            'imap_uid': msg.uid, # Need this for IMAP operations like mark read/delete
+                            'account': self.email,
+                            'thread_id': msg.headers.get('thread-index', ('',))[0] if isinstance(msg.headers.get('thread-index'), tuple) else msg.headers.get('thread-index', ''),
+                            'subject': msg.subject,
+                            'sender': msg.from_,
+                            'recipient': ', '.join(msg.to),
+                            'cc': ', '.join(msg.cc),
+                            'date': msg.date,
+                            'body_text': body_text,
+                            'html_body': msg.html,
+                            'has_attachment': len(msg.attachments) > 0,
+                            'is_read': 'SEEN' in [flag.upper() for flag in msg.flags],
+                            'is_starred': 'FLAGGED' in [flag.upper() for flag in msg.flags],
+                            'labels': msg.flags,
+                            'folder': current_folder,
+                            'raw_email': msg.obj, # email.message.Message object
+                            'attachments': msg.attachments
+                        }
+                        results.append(email_data)
+                        
             return results
         except Exception as e:
             logger.error(f"Error fetching emails: {e}")

@@ -27,7 +27,7 @@ Fetching emails is an asynchronous process because it can take time. When you ru
 ```bash
 ./scripts/mail_cli.py fetch --limit 50 --days 7
 ```
-*Note: If you need to fetch more than 100 emails, you MUST append the `--confirm` flag, and you should ask the user for confirmation first.*
+*Note: By default, it only fetches from `INBOX`. If you need to fetch from all folders (e.g., if the user has server-side routing rules), use `--folder ALL`. You can also specify multiple folders like `--folder "INBOX,Sent"`. The `--limit` applies per folder. If you need to fetch more than 100 emails per folder, you MUST append the `--confirm` flag, and you should ask the user for confirmation first.*
 
 Check the status of the fetch task using the returned `task_id`:
 ```bash

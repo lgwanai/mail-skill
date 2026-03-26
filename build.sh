@@ -29,7 +29,8 @@ rm -rf "$BUILD_TEMP/dist"
 rm -rf "$BUILD_TEMP/mail_data"
 
 # 1. Package the .skill file using the skill-creator script from the clean temp dir
-python /Users/wuliang/.trae/skills/skill-creator/scripts/package_skill.py "$BUILD_TEMP" "$DIST_DIR"
+# We need to set PYTHONPATH so it can find its own scripts
+PYTHONPATH="/Users/wuliang/.trae/skills/skill-creator" python /Users/wuliang/.trae/skills/skill-creator/scripts/package_skill.py "$BUILD_TEMP" "$DIST_DIR"
 
 # Clean up build temp
 rm -rf "$BUILD_TEMP"
