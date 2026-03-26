@@ -1,6 +1,6 @@
 ---
 name: mail-skill
-description: Comprehensive email management skill. Use this skill when the user wants to fetch, search, read, send, reply to, move, delete, mark, or summarize emails. It supports multiple accounts (IMAP/SMTP) and manages emails via a local SQLite index to avoid duplicate fetching and improve search performance.
+description: Comprehensive email management skill. Use this skill when the user wants to fetch, search, read, send, reply to, move, delete, mark, or summarize emails. It supports multiple accounts (IMAP/SMTP), manages emails via a local SQLite index to avoid duplicate fetching, and manages account-specific email signatures (set/save signatures).
 ---
 
 # Mail Management Skill
@@ -15,6 +15,7 @@ This skill provides a robust command-line interface (`scripts/mail_cli.py`) for 
 - **Manage**: Mark as read/starred, move between folders, or delete emails.
 - **Summarize**: Since the skill provides full email text, you (Claude/Trae) can use your own intelligence to summarize the content, extract to-dos, or identify key dates.
 - **Set Signature**: Manage and store the user's email signature persistently per account in `mail_data/<email>/signature.md`. The CLI will automatically append it to outgoing emails.
+- **Update Skill**: Automatically update the mail-skill code from its GitHub repository without overwriting user data or configs.
 
 ## Workflow
 
@@ -89,10 +90,24 @@ Export local database for analysis:
 ### 9. Managing Email Signatures
 When the user asks you to "set my email signature", "save this signature", or "use this as my signature":
 1. First, determine which account they are referring to. If they don't specify, ask them or check `.env` / `references/MEMORY.md` for the default account.
-2. The signature file for an account MUST be stored at `mail_data/<safe_email_address>/signature.md` (where `<safe_email_address>` replaces `@` with `_at_` and `.` with `_`).
-3. Open and edit this specific `signature.md` using your file writing/editing tools.
+2. The signature file for an account MUST be stored at `mail_data/<safe_email_address>/signature.md` (where `<safe_email_address>` replaces `@` with `_at_`, `.` with `_`, and removes any other special characters except `-` and `_`). For example, `test@example.com` becomes `test_at_example_com`.
+3. Open and edit this specific `mail_data/<safe_email_address>/signature.md` file using your file writing/editing tools. If the directory doesn't exist, create it.
 4. Save the exact signature content into the file.
 5. Confirm to the user that their signature has been saved for that specific account and will be automatically used by the CLI in future emails.
+
+### 10. Updating the Skill
+When the user asks to "update the mail-skill plugin" or "update mail-skill":
+1. Clone the latest repository into a temporary directory:
+   `git clone https://github.com/lgwanai/mail-skill.git /tmp/mail-skill-update`
+2. Copy the updated code and documentation files to the current workspace, ensuring you DO NOT overwrite `.env`, `mail_data/`, or `references/` directories.
+   `cp -rf /tmp/mail-skill-update/scripts ./`
+   `cp -f /tmp/mail-skill-update/SKILL.md ./`
+   `cp -f /tmp/mail-skill-update/README.md ./`
+   `cp -f /tmp/mail-skill-update/RELEASE_NOTE.md ./`
+   `cp -f /tmp/mail-skill-update/requirements.txt ./`
+3. Clean up the temporary directory:
+   `rm -rf /tmp/mail-skill-update`
+4. Confirm to the user that the skill code has been successfully updated while their data and configurations remain untouched.
 
 ## Best Practices
 - **Always Search Local First**: Do not fetch unless the user explicitly asks to "check for new emails" or if a local search yields no results.
@@ -101,4 +116,4 @@ When the user asks you to "set my email signature", "save this signature", or "u
 - **Persistent Memory (CRITICAL)**: 
   - ALWAYS read `references/MEMORY.md` to get user's important contacts (like boss's email) and preferences at the start of your task.
   - DO NOT manually append signatures to the `--body` argument when calling `send` or `reply`. The CLI will automatically read the account's `signature.md` and append it for you.
-  - Whenever the user tells you to remember a new contact or preference, you MUST edit `references/MEMORY.md`. Whenever they tell you to save a signature, edit the account's `signature.md`.
+  - Whenever the user tells you to remember a new contact or preference, you MUST edit `references/MEMORY.md`. Whenever they tell you to save a signature, edit the account's `signature.md` as described in section 9.
