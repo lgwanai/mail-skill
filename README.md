@@ -20,7 +20,8 @@
   - **智能防重**：基于 `message_id` 的幂等控制，重复收取不会造成数据冗余。
   - **状态管理**：标记已读/未读、加星标、移动文件夹、删除、导出备份一应俱全，且能通过 `imap_uid` 完美同步至服务器端。
 - 🧠 **AI 专属持久记忆 (Persistent Memory)**
-  - **自动记录与应用**：专门设计了 `references/` 目录用于存储持久记忆库。当用户说“某某邮箱是老板邮箱”时，Agent 会自动修改 `references/MEMORY.md` 记录下来；当用户设置签名时，则会记录在专属的 `references/SIGNATURE.md` 中。每次发邮件前 Agent 会自动读取，彻底解决 Agent 遗忘关键联系人或签名的问题。
+  - **自动记录与应用**：专门设计了 `references/` 目录用于存储持久记忆库。当用户说“某某邮箱是老板邮箱”时，Agent 会自动修改 `references/MEMORY.md` 记录下来。
+  - **账号专属签名**：签名文件与账号绑定隔离，存储在 `mail_data/<账号邮箱>/signature.md`。当用户设置签名时，Agent 会编辑该账号专属的文件；后续 CLI 在发送或回复邮件时会自动在底层将签名拼接至正文（支持普通文本和 HTML），彻底解决 Agent 遗忘签名或跨账号签名错乱的问题。
   - **异步机制**：针对海量邮件收取设计了异步任务，保证 AI Agent 交互不阻塞。
 - 🤖 **专为 AI Agent 设计**
   - **完美兼容**：原生支持并适配市面上各种主流 Agent 工具，如 **OpenClaw、Claude Code、WorkBuddy、OpenCode、Trae** 等。

@@ -17,7 +17,7 @@
 #### 🧠 AI Persistent Memory Architecture
 - **Isolated Memory Store**: Created a dedicated `references/` directory to store context that the Agent should never forget across sessions.
 - **Contacts & Preferences**: Agent uses `references/MEMORY.md` to memorize and retrieve user preferences and important contact aliases (e.g., "Boss's email").
-- **Signature Management**: Extracted email signatures into a standalone `references/SIGNATURE.md` file. The Agent is now instructed to read this file before sending any email and automatically append the signature to the outgoing message.
+- **Account-Specific Signatures**: Email signatures are now strictly tied to their respective email accounts. They are stored in `mail_data/<account_email>/signature.md`. The CLI automatically reads this file and appends the signature to both plain text and HTML bodies during `send` and `reply` commands, preventing cross-account signature mix-ups.
 
 ---
 

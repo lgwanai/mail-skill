@@ -135,7 +135,8 @@ def _get_account_paths(config, email_address):
         'db_path': os.path.join(account_root, 'mail_index.db'),
         'attach_path': os.path.join(account_root, 'attachments'),
         'eml_path': os.path.join(account_root, 'eml'),
-        'json_path': os.path.join(account_root, 'json')
+        'json_path': os.path.join(account_root, 'json'),
+        'signature_path': os.path.join(account_root, 'signature.md')
     }
 
 def _run_fetch_task(task_id, config, db_path, args):
@@ -314,8 +315,38 @@ def cmd_read(args, config, db):
         
     print(json.dumps({"status": "success", "email": email}, ensure_ascii=False, indent=2))
 
+def _append_signature(body_text, html_body, signature_path):
+    """Append signature to the email body if the signature file exists and is not empty."""
+    if not os.path.exists(signature_path):
+        return body_text, html_body
+        
+    with open(signature_path, 'r', encoding='utf-8') as f:
+        signature = f.read().strip()
+        
+    if not signature:
+        return body_text, html_body
+        
+    # Append to plain text
+    new_body_text = f"{body_text}\n\n--\n{signature}"
+    
+    # Append to HTML if it exists
+    new_html_body = html_body
+    if html_body:
+        # Simple HTML signature append
+        html_signature = signature.replace('\n', '<br>')
+        if '</body>' in html_body.lower():
+            # Insert before closing body tag
+            import re
+            new_html_body = re.sub(r'(</body>)', rf'<br><br>--<br>{html_signature}\1', html_body, flags=re.IGNORECASE)
+        else:
+            new_html_body = f"{html_body}<br><br>--<br>{html_signature}"
+            
+    return new_body_text, new_html_body
+
 def cmd_send(args, config, db):
     client = get_client(config, getattr(args, 'account', None))
+    paths = _get_account_paths(config, client.email)
+    
     try:
         # Replace literal "\n" strings with actual newline characters
         # This handles cases where AI passes "Line 1\nLine 2" as a single string argument
@@ -323,6 +354,9 @@ def cmd_send(args, config, db):
         html_body = getattr(args, 'html_body', None)
         if html_body:
             html_body = html_body.replace('\\n', '\n')
+            
+        # Append signature
+        body_text, html_body = _append_signature(body_text, html_body, paths['signature_path'])
         
         attachments = _process_attachments(args.attach, getattr(args, 'zip_as', None))
         
@@ -396,6 +430,9 @@ def cmd_reply(args, config, db):
         html_body = getattr(args, 'html_body', None)
         if html_body:
             html_body = html_body.replace('\\n', '\n')
+            
+        # Append signature
+        body_text, html_body = _append_signature(body_text, html_body, paths['signature_path'])
             
         attachments = _process_attachments(args.attach, getattr(args, 'zip_as', None))
             

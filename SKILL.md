@@ -14,7 +14,7 @@ This skill provides a robust command-line interface (`scripts/mail_cli.py`) for 
 - **Send/Reply/Forward**: Send new emails or reply/forward existing ones via SMTP.
 - **Manage**: Mark as read/starred, move between folders, or delete emails.
 - **Summarize**: Since the skill provides full email text, you (Claude/Trae) can use your own intelligence to summarize the content, extract to-dos, or identify key dates.
-- **Set Signature**: Manage and store the user's email signature persistently in `references/SIGNATURE.md`, which is automatically appended to outgoing emails.
+- **Set Signature**: Manage and store the user's email signature persistently per account in `mail_data/<email>/signature.md`. The CLI will automatically append it to outgoing emails.
 
 ## Workflow
 
@@ -88,9 +88,11 @@ Export local database for analysis:
 
 ### 9. Managing Email Signatures
 When the user asks you to "set my email signature", "save this signature", or "use this as my signature":
-1. Open and edit `references/SIGNATURE.md` using your file writing/editing tools.
-2. Save the exact signature content into the file.
-3. Confirm to the user that their signature has been saved and will be automatically used in future emails.
+1. First, determine which account they are referring to. If they don't specify, ask them or check `.env` / `references/MEMORY.md` for the default account.
+2. The signature file for an account MUST be stored at `mail_data/<safe_email_address>/signature.md` (where `<safe_email_address>` replaces `@` with `_at_` and `.` with `_`).
+3. Open and edit this specific `signature.md` using your file writing/editing tools.
+4. Save the exact signature content into the file.
+5. Confirm to the user that their signature has been saved for that specific account and will be automatically used by the CLI in future emails.
 
 ## Best Practices
 - **Always Search Local First**: Do not fetch unless the user explicitly asks to "check for new emails" or if a local search yields no results.
@@ -98,5 +100,5 @@ When the user asks you to "set my email signature", "save this signature", or "u
 - **Smart Summarization**: Use the `summarize` command for quick professional reports. For deeper analysis of a single thread, use `read` and analyze the content directly.
 - **Persistent Memory (CRITICAL)**: 
   - ALWAYS read `references/MEMORY.md` to get user's important contacts (like boss's email) and preferences at the start of your task.
-  - ALWAYS read `references/SIGNATURE.md` before sending or replying to an email, and append the signature to the body if one exists.
-  - Whenever the user tells you to remember a new contact, preference, or signature, you MUST edit the corresponding file in the `references/` folder to permanently store it.
+  - DO NOT manually append signatures to the `--body` argument when calling `send` or `reply`. The CLI will automatically read the account's `signature.md` and append it for you.
+  - Whenever the user tells you to remember a new contact or preference, you MUST edit `references/MEMORY.md`. Whenever they tell you to save a signature, edit the account's `signature.md`.
