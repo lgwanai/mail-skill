@@ -10,6 +10,7 @@ import uuid
 import re
 import zipfile
 import tempfile
+import markdown
 from datetime import datetime
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
@@ -371,15 +372,25 @@ def _append_signature(body_text, html_body, signature_path):
     new_html_body = html_body
     if html_body:
         # Simple HTML signature append
-        html_signature = signature.replace('\n', '<br>')
+        html_signature = markdown.markdown(signature)
         if '</body>' in html_body.lower():
             # Insert before closing body tag
             import re
-            new_html_body = re.sub(r'(</body>)', rf'<br><br>--<br>{html_signature}\1', html_body, flags=re.IGNORECASE)
+            new_html_body = re.sub(r'(</body>)', rf'<div class="email-signature">{html_signature}</div>\1', html_body, flags=re.IGNORECASE)
         else:
-            new_html_body = f"{html_body}<br><br>--<br>{html_signature}"
+            new_html_body = f"{html_body}<div class=\"email-signature\">{html_signature}</div>"
             
     return new_body_text, new_html_body
+
+def _markdown_to_html(md_text):
+    """Convert markdown text to styled HTML for emails"""
+    html_content = markdown.markdown(md_text, extensions=['tables', 'fenced_code', 'nl2br'])
+    # Render with our template
+    try:
+        return _render_table('email_theme.html.j2', {'content': html_content})
+    except Exception as e:
+        logger.warning(f"Could not load HTML template, using raw HTML: {e}")
+        return html_content
 
 def cmd_send(args, config, db):
     client = get_client(config, getattr(args, 'account', None))
@@ -392,6 +403,9 @@ def cmd_send(args, config, db):
         html_body = getattr(args, 'html_body', None)
         if html_body:
             html_body = html_body.replace('\\n', '\n')
+        else:
+            # Auto-convert markdown body to HTML
+            html_body = _markdown_to_html(body_text)
             
         # Append signature
         body_text, html_body = _append_signature(body_text, html_body, paths['signature_path'])
@@ -468,6 +482,9 @@ def cmd_reply(args, config, db):
         html_body = getattr(args, 'html_body', None)
         if html_body:
             html_body = html_body.replace('\\n', '\n')
+        else:
+            # Auto-convert markdown body to HTML
+            html_body = _markdown_to_html(body_text)
             
         # Append signature
         body_text, html_body = _append_signature(body_text, html_body, paths['signature_path'])

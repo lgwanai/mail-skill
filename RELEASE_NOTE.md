@@ -1,6 +1,17 @@
 # Mail Skill Release Notes
 
-## [Latest Update] - FTS5 Search, Thread Timeline & Markdown Rendering
+## [Latest Update] - Markdown to HTML Auto-Rendering for Outgoing Emails
+
+### ✨ New Features & Improvements
+
+#### 🎨 Beautiful Outgoing HTML Emails
+- **Markdown Auto-Conversion**: The `send` and `reply` commands now automatically convert plain Markdown bodies into richly formatted HTML emails. You no longer need to manually write HTML; just let the AI output standard Markdown.
+- **Tech-Style CSS Theme**: Introduced a built-in `email_theme.html.j2` template that applies a clean, modern, "tech" style CSS to the outgoing email. It features elegant zebra-striped tables with hover effects, clear header hierarchies with bottom borders, and cleanly styled blockquotes and code blocks.
+- **Dependency Update**: Added `markdown` library to `requirements.txt` to support the new conversion engine.
+
+---
+
+## v1.3.0 (2026-03-27) - FTS5 Search, Thread Timeline & Markdown Rendering
 
 ### ✨ New Features & Improvements
 
