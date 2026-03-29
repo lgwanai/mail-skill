@@ -1,6 +1,19 @@
 # Mail Skill Release Notes
 
-## [Latest Update] - Markdown to HTML Auto-Rendering for Outgoing Emails
+## [Latest Update] - Semantic Vector Search & Hybrid Reranking for Emails
+
+### ✨ New Features & Improvements
+
+#### 🧠 Semantic & Hybrid Search
+- **ChromaDB Integration**: Integrated ChromaDB to provide semantic vector search capabilities. You can now find emails based on fuzzy descriptions or concepts, even if you don't remember the exact keywords.
+- **Hybrid Search & Reranking**: Introduced the `--hybrid` search mode. This mode fetches results from both FTS5 (keyword search) and ChromaDB (vector search), deduplicates them, and then uses a cross-encoder model (default: `BAAI/bge-reranker-base`) to rerank the combined results for maximum accuracy.
+- **Local & Cloud Embeddings**: By default, uses local embedding models (`sentence-transformers`) for maximum privacy. It also supports configuration via `.env` to use OpenAI or other compatible cloud embedding APIs.
+- **CLI Support**: The `search` command now supports `--vector` and `--hybrid` flags.
+- **Dependency Update**: Added `chromadb` and `sentence-transformers` to `requirements.txt`.
+
+---
+
+## [Previous Update] - Markdown to HTML Auto-Rendering for Outgoing Emails
 
 ### ✨ New Features & Improvements
 

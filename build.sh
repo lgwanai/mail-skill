@@ -18,11 +18,11 @@ rm -f "$DIST_DIR/${SKILL_NAME}-${DATE_SUFFIX}.zip"
 
 echo "Packaging skill into dist directory..."
 
-# Create a clean temp directory for building the .skill file to avoid including .env
+# Create a clean temp directory for building the .skill file to avoid including config.txt
 BUILD_TEMP=$(mktemp -d)
 cp -r "$PROJECT_DIR"/* "$BUILD_TEMP/"
 cp "$PROJECT_DIR/.gitignore" "$BUILD_TEMP/" 2>/dev/null || true
-rm -f "$BUILD_TEMP/.env"
+rm -f "$BUILD_TEMP/config.txt"
 rm -f "$BUILD_TEMP/163邮箱故障排查指南.md"
 rm -f "$BUILD_TEMP/idea.md"
 rm -rf "$BUILD_TEMP/dist"
@@ -52,12 +52,12 @@ TEMP_DIR=$(mktemp -d)
 mkdir -p "$TEMP_DIR/$SKILL_NAME"
 
 # Copy files to temp dir, excluding unnecessary ones
-cp -r SKILL.md README.md scripts references assets requirements.txt example.env "$TEMP_DIR/$SKILL_NAME/" 2>/dev/null || true
+cp -r SKILL.md README.md scripts references assets requirements.txt example.config.txt "$TEMP_DIR/$SKILL_NAME/" 2>/dev/null || true
 rm -f "$TEMP_DIR/$SKILL_NAME/163邮箱故障排查指南.md" 2>/dev/null || true
 rm -f "$TEMP_DIR/$SKILL_NAME/idea.md" 2>/dev/null || true
 
-# Explicitly ensure .env is not in the zip folder (just in case)
-rm -f "$TEMP_DIR/$SKILL_NAME/.env"
+# Explicitly ensure config.txt is not in the zip folder (just in case)
+rm -f "$TEMP_DIR/$SKILL_NAME/config.txt"
 
 # Go to temp dir and zip
 cd "$TEMP_DIR"

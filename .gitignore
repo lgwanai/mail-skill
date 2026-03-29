@@ -1,5 +1,5 @@
 dist/
-.env
+config.txt
 build.sh
 mail_data/
 __pycache__/

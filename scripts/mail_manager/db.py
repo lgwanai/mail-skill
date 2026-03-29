@@ -3,6 +3,8 @@ import json
 import os
 import logging
 from datetime import datetime
+import chromadb
+from chromadb.utils import embedding_functions
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +12,33 @@ class MailDatabase:
     def __init__(self, db_path):
         self.db_path = db_path
         self._init_db()
+        self._chroma_client = None
+        self._collection = None
+
+    def _get_chroma_collection(self):
+        if self._collection is None:
+            chroma_dir = os.path.join(os.path.dirname(self.db_path), 'chroma_db')
+            os.makedirs(chroma_dir, exist_ok=True)
+            self._chroma_client = chromadb.PersistentClient(path=chroma_dir)
+            
+            # Use environment variables to configure embedding function if available
+            api_key = os.getenv('OPENAI_API_KEY')
+            api_base = os.getenv('OPENAI_API_BASE')
+            if api_key:
+                ef = embedding_functions.OpenAIEmbeddingFunction(
+                    api_key=api_key,
+                    api_base=api_base,
+                    model_name=os.getenv('EMBEDDING_MODEL_NAME', 'text-embedding-3-small')
+                )
+            else:
+                # Default to local model
+                ef = embedding_functions.DefaultEmbeddingFunction()
+                
+            self._collection = self._chroma_client.get_or_create_collection(
+                name="emails",
+                embedding_function=ef
+            )
+        return self._collection
 
     def _get_connection(self):
         os.makedirs(os.path.dirname(self.db_path) or '.', exist_ok=True)
@@ -176,6 +205,29 @@ class MailDatabase:
                     ))
             
             conn.commit()
+
+            # Save to ChromaDB for vector search
+            try:
+                collection = self._get_chroma_collection()
+                doc_text = f"Subject: {email_data.get('subject', '')}\nFrom: {email_data.get('sender', '')}\nDate: {email_data.get('date', '')}\n\n{email_data.get('body_text', '')}"
+                
+                # Truncate text if too long to avoid token limits
+                if len(doc_text) > 8000:
+                    doc_text = doc_text[:8000]
+                    
+                metadata = {
+                    "subject": email_data.get('subject', '') or '',
+                    "sender": email_data.get('sender', '') or '',
+                    "date": str(email_data.get('date', ''))
+                }
+                
+                collection.upsert(
+                    ids=[email_data.get('message_id')],
+                    documents=[doc_text],
+                    metadatas=[metadata]
+                )
+            except Exception as e:
+                logger.warning(f"Failed to save email to ChromaDB: {e}")
             
     def search_fts(self, query, limit=100, offset=0):
         with self._get_connection() as conn:
@@ -196,6 +248,80 @@ class MailDatabase:
                 email_dict['attachments'] = [dict(att) for att in att_rows]
                 result.append(email_dict)
             return result
+
+    def search_vector(self, query, limit=10):
+        """Search emails using vector similarity"""
+        try:
+            collection = self._get_chroma_collection()
+            results = collection.query(
+                query_texts=[query],
+                n_results=limit
+            )
+            
+            if not results or not results['ids'] or not results['ids'][0]:
+                return []
+                
+            message_ids = results['ids'][0]
+            
+            # Fetch full email data from SQLite
+            emails = []
+            for msg_id in message_ids:
+                email = self.get_email(msg_id)
+                if email:
+                    emails.append(email)
+            return emails
+        except Exception as e:
+            logger.error(f"Vector search failed: {e}")
+            return []
+
+    def _get_reranker(self):
+        if not hasattr(self, '_reranker'):
+            from sentence_transformers import CrossEncoder
+            reranker_model_name = os.getenv('RERANKER_MODEL_NAME', 'BAAI/bge-reranker-base')
+            # Initialize CrossEncoder (will be downloaded on first run if not cached)
+            self._reranker = CrossEncoder(reranker_model_name)
+        return self._reranker
+
+    def search_hybrid(self, query, limit=10):
+        """Hybrid search combining FTS and Vector search, with Reranking"""
+        # 1. Fetch candidates
+        fts_results = self.search_fts(query, limit=limit*2)
+        vec_results = self.search_vector(query, limit=limit*2)
+        
+        # 2. Merge and deduplicate
+        merged_results = {}
+        for r in fts_results:
+            merged_results[r['message_id']] = r
+        for r in vec_results:
+            merged_results[r['message_id']] = r
+            
+        if not merged_results:
+            return []
+            
+        emails = list(merged_results.values())
+        
+        # 3. Rerank
+        try:
+            reranker = self._get_reranker()
+            pairs = []
+            for email in emails:
+                doc_text = f"Subject: {email.get('subject', '')}\nFrom: {email.get('sender', '')}\n\n{email.get('body_text', '')}"
+                if len(doc_text) > 2000:
+                    doc_text = doc_text[:2000]
+                pairs.append([query, doc_text])
+                
+            scores = reranker.predict(pairs)
+            
+            for i, email in enumerate(emails):
+                email['_rerank_score'] = float(scores[i])
+                
+            # Sort by score descending
+            emails.sort(key=lambda x: x.get('_rerank_score', 0), reverse=True)
+            
+        except Exception as e:
+            logger.error(f"Reranking failed: {e}")
+            
+        return emails[:limit]
 
     def get_thread_timeline(self, seed_message_id, limit=100):
         def norm(mid):
@@ -368,3 +494,9 @@ class MailDatabase:
             cursor.execute('DELETE FROM attachments WHERE message_id = ?', (message_id,))
             cursor.execute('DELETE FROM emails WHERE message_id = ?', (message_id,))
             conn.commit()
+            
+        try:
+            collection = self._get_chroma_collection()
+            collection.delete(ids=[message_id])
+        except Exception as e:
+            logger.warning(f"Failed to delete email from ChromaDB: {e}")

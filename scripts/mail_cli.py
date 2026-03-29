@@ -29,13 +29,13 @@ TASKS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 os.makedirs(TASKS_DIR, exist_ok=True)
 
 def load_config():
-    """Load configuration from .env file"""
-    # Look for .env in the parent directory of scripts
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+    """Load configuration from config.txt file"""
+    # Look for config.txt in the parent directory of scripts
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.txt')
     if os.path.exists(env_path):
         load_dotenv(env_path)
     else:
-        load_dotenv() # Try current directory
+        load_dotenv('config.txt') # Try current directory
         
     config = {
         'STORAGE_ROOT': os.getenv('MAIL_STORAGE_ROOT', './mail_data'),
@@ -65,7 +65,7 @@ def load_config():
 
 def get_client(config, email_account=None):
     if not config['ACCOUNTS']:
-        raise ValueError("No mail accounts configured in .env")
+        raise ValueError("No mail accounts configured in config.txt")
         
     if email_account and email_account in config['ACCOUNTS']:
         account_config = config['ACCOUNTS'][email_account]
@@ -288,7 +288,13 @@ def cmd_search(args, config, db):
     isolated_db = MailDatabase(paths['db_path'])
     
     if args.query:
-        results = isolated_db.search_fts(args.query, limit=args.limit)
+        if getattr(args, 'hybrid', False):
+            results = isolated_db.search_hybrid(args.query, limit=args.limit)
+        elif getattr(args, 'vector', False):
+            results = isolated_db.search_vector(args.query, limit=args.limit)
+        else:
+            results = isolated_db.search_fts(args.query, limit=args.limit)
+            
         filtered = []
         for r in results:
             if args.folder and r.get('folder') != args.folder:
@@ -776,6 +782,8 @@ def main():
     # search
     search_p = subparsers.add_parser("search", help="Search local emails")
     search_p.add_argument("--query", help="Text to search in subject/body/sender")
+    search_p.add_argument("--vector", action="store_true", help="Use vector semantic search instead of full-text search")
+    search_p.add_argument("--hybrid", action="store_true", help="Use hybrid search (FTS + Vector) with reranking")
     search_p.add_argument("--account", help="Filter by account")
     search_p.add_argument("--folder", help="Filter by folder")
     search_p.add_argument("--sender", help="Filter by sender")
