@@ -1,6 +1,24 @@
 # Mail Skill Release Notes
 
-## [Latest Update] - Semantic Vector Search & Hybrid Reranking for Emails
+## [Latest Update] - Bug Fixes: Reply History, Signature Paths & Safety Locks
+
+### 🐛 Bug Fixes & Improvements
+
+#### 🛡️ AI Agent Safety Locks
+- **Mandatory Send Confirmation**: Added a critical rule to `SKILL.md` enforcing that the AI Agent **must** present a complete email draft (including recipients, subject, and body) to the user for explicit confirmation before executing any `send` or `reply` commands. This prevents accidental or improperly formatted emails from being sent autonomously.
+
+#### 📧 Enhanced Reply Formatting
+- **Reply History Retention**: Fixed a critical bug where replying to an email did not include the original message history. The `reply` command now automatically extracts the original sender, date, and body, and appends them below your reply inside a professionally styled `<div class="gmail_quote">` block, mimicking standard email client behavior.
+- **Forced HTML Conversion**: The CLI now strictly forces the conversion of the AI's Markdown output into the styled HTML template for all outgoing emails, regardless of whether the `--html-body` argument was explicitly provided by the Agent.
+
+#### 🪪 Signature System Reliability
+- **Complex Domain Support**: Fixed an issue where email addresses with complex domains (e.g., `user@chinamobile.com`) failed to locate their corresponding `signature.md` files. The directory sanitization logic now correctly maps `@` to `_at_` and `.` to `_`.
+- **Signature Styling**: Added subtle CSS styling (a light gray top border and slightly smaller text) to appended signatures so they look distinct and professional compared to the main email body.
+- **Fallback Pathing**: Added a robust fallback mechanism to find signature files in legacy or non-standard directory structures if the sanitized path isn't found.
+
+---
+
+## [Previous Update] - Semantic Vector Search & Hybrid Reranking for Emails
 
 ### ✨ New Features & Improvements
 
