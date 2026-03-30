@@ -127,8 +127,11 @@ def _process_attachments(attach_paths, zip_as=None):
 
 def _get_account_paths(config, email_address):
     """Generate isolated storage paths for a specific email account"""
-    # Sanitize email address for directory name
-    safe_email = "".join([c for c in email_address if c.isalpha() or c.isdigit() or c in '-_.@']).rstrip()
+    # Sanitize email address for directory name.
+    # Replace special characters with underscore to match user's expected wuliang_at_chinamobile_com
+    safe_email = email_address.replace('@', '_at_').replace('.', '_')
+    # Remove any other characters that might be problematic, but keep alphanumeric, -, _, and @.
+    safe_email = "".join([c for c in safe_email if c.isalpha() or c.isdigit() or c in '-_']).rstrip()
     
     account_root = os.path.join(config['STORAGE_ROOT'], safe_email)
     
@@ -362,11 +365,25 @@ def cmd_read(args, config, db):
 
 def _append_signature(body_text, html_body, signature_path):
     """Append signature to the email body if the signature file exists and is not empty."""
-    if not os.path.exists(signature_path):
+    # Also support a fallback to just using the email address as the folder name
+    # In case the directory wasn't sanitized with _at_
+    fallback_path = signature_path.replace('_at_', '@').replace('_com', '.com').replace('_net', '.net').replace('_cn', '.cn').replace('_org', '.org')
+    
+    actual_path = signature_path
+    if not os.path.exists(actual_path):
+        # Try the raw email format if the sanitized one doesn't exist
+        alt_path = os.path.join(os.path.dirname(os.path.dirname(signature_path)), os.path.basename(os.path.dirname(fallback_path)), 'signature.md')
+        if os.path.exists(alt_path):
+            actual_path = alt_path
+        else:
+            return body_text, html_body
+            
+    try:
+        with open(actual_path, 'r', encoding='utf-8') as f:
+            signature = f.read().strip()
+    except Exception as e:
+        logger.warning(f"Failed to read signature file {actual_path}: {e}")
         return body_text, html_body
-        
-    with open(signature_path, 'r', encoding='utf-8') as f:
-        signature = f.read().strip()
         
     if not signature:
         return body_text, html_body
@@ -382,9 +399,9 @@ def _append_signature(body_text, html_body, signature_path):
         if '</body>' in html_body.lower():
             # Insert before closing body tag
             import re
-            new_html_body = re.sub(r'(</body>)', rf'<div class="email-signature">{html_signature}</div>\1', html_body, flags=re.IGNORECASE)
+            new_html_body = re.sub(r'(</body>)', rf'<br><br><div class="email-signature" style="color: #888; font-size: 0.9em; border-top: 1px solid #eee; padding-top: 10px; margin-top: 20px;">{html_signature}</div>\1', html_body, flags=re.IGNORECASE)
         else:
-            new_html_body = f"{html_body}<div class=\"email-signature\">{html_signature}</div>"
+            new_html_body = f"{html_body}<br><br><div class=\"email-signature\" style=\"color: #888; font-size: 0.9em; border-top: 1px solid #eee; padding-top: 10px; margin-top: 20px;\">{html_signature}</div>"
             
     return new_body_text, new_html_body
 
@@ -407,11 +424,10 @@ def cmd_send(args, config, db):
         # This handles cases where AI passes "Line 1\nLine 2" as a single string argument
         body_text = args.body.replace('\\n', '\n')
         html_body = getattr(args, 'html_body', None)
-        if html_body:
-            html_body = html_body.replace('\\n', '\n')
-        else:
-            # Auto-convert markdown body to HTML
-            html_body = _markdown_to_html(body_text)
+        
+        # ALWAYS auto-convert markdown body to HTML if not provided, or override if provided
+        # Since we want to FORCE markdown to HTML, we will ignore args.html_body and always generate it
+        html_body = _markdown_to_html(body_text)
             
         # Append signature
         body_text, html_body = _append_signature(body_text, html_body, paths['signature_path'])
@@ -485,22 +501,55 @@ def cmd_reply(args, config, db):
     
     try:
         body_text = args.body.replace('\\n', '\n')
-        html_body = getattr(args, 'html_body', None)
-        if html_body:
-            html_body = html_body.replace('\\n', '\n')
+        
+        # Append original email history to body text
+        orig_date = orig_email.get('date', '')
+        orig_sender_full = orig_email.get('sender', '')
+        orig_body = orig_email.get('body_text', '')
+        
+        history_separator = f"\n\n--- Original Message ---\nFrom: {orig_sender_full}\nDate: {orig_date}\nTo: {orig_to}\nSubject: {orig_email.get('subject', '')}\n\n"
+        
+        # Add "> " prefix to original body for blockquote style in plain text
+        quoted_orig_body = "\n".join([f"> {line}" for line in orig_body.split('\n')])
+        body_text_with_history = body_text + history_separator + quoted_orig_body
+        
+        # ALWAYS auto-convert markdown body to HTML to ensure beautiful formatting
+        html_reply_part = _markdown_to_html(body_text)
+        
+        # Format history for HTML
+        html_history = f"""
+        <br><br>
+        <div class="gmail_quote" style="border-left: 1px solid #ccc; padding-left: 1ex; margin-left: 1ex; color: #555;">
+            <div dir="ltr">
+                <br>--- Original Message ---<br>
+                <b>From:</b> {orig_sender_full}<br>
+                <b>Date:</b> {orig_date}<br>
+                <b>To:</b> {orig_to}<br>
+                <b>Subject:</b> {orig_email.get('subject', '')}<br>
+            </div>
+            <br>
+            <div>
+                {orig_body.replace(chr(10), '<br>')}
+            </div>
+        </div>
+        """
+        
+        # If the template conversion returned a full HTML doc, insert before </body>
+        if '</body>' in html_reply_part.lower():
+            import re
+            html_body = re.sub(r'(</body>)', rf'{html_history}\1', html_reply_part, flags=re.IGNORECASE)
         else:
-            # Auto-convert markdown body to HTML
-            html_body = _markdown_to_html(body_text)
+            html_body = html_reply_part + html_history
             
         # Append signature
-        body_text, html_body = _append_signature(body_text, html_body, paths['signature_path'])
+        body_text_with_history, html_body = _append_signature(body_text_with_history, html_body, paths['signature_path'])
             
         attachments = _process_attachments(args.attach, getattr(args, 'zip_as', None))
             
         client.send_email(
             to=reply_to_addrs,
             subject=subject,
-            body_text=body_text,
+            body_text=body_text_with_history,
             html_body=html_body,
             cc=reply_cc_addrs if reply_cc_addrs else None,
             attachments=attachments,

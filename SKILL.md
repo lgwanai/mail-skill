@@ -73,6 +73,8 @@ To view the full context of a conversation (A→B→C→D) based on a specific e
 ```bash
 ./scripts/mail_cli.py send --to "recipient@example.com" --subject "Hello" --body "Message body" --attach "path/to/file1.txt" "path/to/folder1"
 ```
+**🚨 CRITICAL SENDING RULE**: Before you execute the `send` or `reply` command, you MUST present the complete draft of the email (including recipients, subject, and the exact body text) to the user and ask for their explicit confirmation. Do not send the email until the user says "Yes", "Looks good", "Send it", etc.
+
 To send an HTML email, provide the `--html-body` parameter:
 ```bash
 ./scripts/mail_cli.py send --to "recipient@example.com" --subject "Hello" --body "Plain text fallback" --html-body "<h1>Hello</h1><p>Message body</p>"
@@ -105,6 +107,7 @@ When the user asks you to "set my email signature", "save this signature", or "u
 
 ## Best Practices
 - **Always Search Local First**: Do not fetch unless the user explicitly asks to "check for new emails" or if a local search yields no results.
+- **Mandatory Send Confirmation**: Never assume a drafted email is perfect. Always show the draft and wait for user confirmation before executing `./scripts/mail_cli.py send` or `reply`.
 - **Handling Replies**: Use the `reply` command. It automatically handles the `In-Reply-To` headers, sets the `To` / `Cc` addresses correctly, and prepends `Re:` to the subject. Use `--all` to reply to all original senders and CCs. Example: `./scripts/mail_cli.py reply "<message_id>" --body "My reply" --all`
 - **Smart Summarization**: Use the `summarize` command for quick professional reports. For deeper analysis of a single thread, use `read` and analyze the content directly.
 - **Persistent Memory (CRITICAL)**: 
