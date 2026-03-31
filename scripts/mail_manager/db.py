@@ -25,14 +25,24 @@ class MailDatabase:
             api_key = os.getenv('OPENAI_API_KEY')
             api_base = os.getenv('OPENAI_API_BASE')
             if api_key:
+                # Some OpenAI compatible endpoints (like siliconflow) might need adjusting the path
+                # Standard OpenAI path is /v1/embeddings, but chromadb appends /embeddings automatically
+                # So we should be careful with OPENAI_API_BASE
+                if api_base and api_base.endswith('/embeddings'):
+                    api_base = api_base[:-11] # Remove /embeddings so chromadb can append it
+                
                 ef = embedding_functions.OpenAIEmbeddingFunction(
                     api_key=api_key,
                     api_base=api_base,
                     model_name=os.getenv('EMBEDDING_MODEL_NAME', 'text-embedding-3-small')
                 )
             else:
-                # Default to local model
-                ef = embedding_functions.DefaultEmbeddingFunction()
+                # Default to local model, allow override via EMBEDDING_MODEL_NAME
+                local_model = os.getenv('EMBEDDING_MODEL_NAME', 'all-MiniLM-L6-v2')
+                if local_model == 'all-MiniLM-L6-v2':
+                    ef = embedding_functions.DefaultEmbeddingFunction()
+                else:
+                    ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=local_model)
                 
             self._collection = self._chroma_client.get_or_create_collection(
                 name="emails",
@@ -135,6 +145,20 @@ class MailDatabase:
                 ''')
             except sqlite3.OperationalError:
                 pass
+                
+            # Auto-rebuild FTS5 if it's empty but emails exist
+            try:
+                cursor.execute("SELECT count(*) FROM emails_fts")
+                fts_count = cursor.fetchone()[0]
+                if fts_count == 0:
+                    cursor.execute("SELECT count(*) FROM emails")
+                    email_count = cursor.fetchone()[0]
+                    if email_count > 0:
+                        logger.info("FTS5 index is empty. Rebuilding...")
+                        cursor.execute("INSERT INTO emails_fts(emails_fts) VALUES('rebuild')")
+            except Exception as e:
+                logger.warning(f"Failed to check or rebuild FTS5 index: {e}")
+                
             conn.commit()
 
     def exists(self, message_id):
@@ -232,13 +256,35 @@ class MailDatabase:
     def search_fts(self, query, limit=100, offset=0):
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                SELECT e.* FROM emails_fts f
-                JOIN emails e ON e.id = f.rowid
-                WHERE emails_fts MATCH ?
-                ORDER BY e.date DESC LIMIT ? OFFSET ?
-            ''', (query, limit, offset))
-            rows = cursor.fetchall()
+            rows = []
+            
+            # 1. Try FTS5 first (fast for English/exact matches)
+            try:
+                # Safely escape quotes for FTS5 syntax
+                safe_query = query.replace('"', '""')
+                # For exact phrase match and preventing operator syntax errors (e.g. from hyphens)
+                match_query = f'"{safe_query}"'
+                
+                cursor.execute('''
+                    SELECT e.* FROM emails_fts f
+                    JOIN emails e ON e.id = f.rowid
+                    WHERE emails_fts MATCH ?
+                    ORDER BY e.date DESC LIMIT ? OFFSET ?
+                ''', (match_query, limit, offset))
+                rows = cursor.fetchall()
+            except Exception as e:
+                logger.warning(f"FTS5 search failed or syntax error: {e}")
+                
+            # 2. Fallback to LIKE search (crucial for Chinese/CJK characters and partial word matches)
+            if not rows:
+                logger.info("FTS returned no results, falling back to LIKE search...")
+                cursor.execute('''
+                    SELECT * FROM emails 
+                    WHERE subject LIKE ? OR body_text LIKE ? OR sender LIKE ?
+                    ORDER BY date DESC LIMIT ? OFFSET ?
+                ''', (f'%{query}%', f'%{query}%', f'%{query}%', limit, offset))
+                rows = cursor.fetchall()
+
             result = []
             for row in rows:
                 email_dict = dict(row)

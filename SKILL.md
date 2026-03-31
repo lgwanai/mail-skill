@@ -56,6 +56,15 @@ Search locally first. This is much faster and doesn't hit the server:
 ./scripts/mail_cli.py search --query "meeting" --limit 10
 ./scripts/mail_cli.py search --sender "boss@company.com" --is-read 0
 ```
+**Important Search Flags**:
+- **Semantic / Fuzzy Search**: If the user is asking to find emails by fuzzy concepts, ideas, or vague descriptions (e.g., "find the email about the project launch last week"), you MUST use the `--hybrid` flag. This combines keyword search with vector semantic search and reranks the results for high accuracy.
+```bash
+./scripts/mail_cli.py search --query "project launch" --hybrid --limit 5
+```
+- **Rebuilding Index**: If the user mentions that search is empty but emails exist (e.g., they fetched emails before the search features were added), run the `rebuild-index` command to sync all old emails into the FTS5 and Vector databases:
+```bash
+./scripts/mail_cli.py rebuild-index --account "<email_account>"
+```
 
 ### 5. Reading an Email
 To read the full text and get attachment info, use the `message_id` from the search results. The output is formatted as a vertical Markdown table for easy reading in chat interfaces:

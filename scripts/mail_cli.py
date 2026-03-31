@@ -811,6 +811,62 @@ def cmd_thread(args, config, db):
     table_md = _render_table('thread.md.j2', {"rows": rows})
     print(table_md)
 
+def cmd_rebuild_index(args, config, db):
+    client = get_client(config, getattr(args, 'account', None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths['db_path'])
+    
+    print(f"Rebuilding search indices for {client.email}...")
+    
+    with isolated_db._get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # 1. Rebuild FTS5
+        print("Rebuilding FTS5 index...")
+        try:
+            cursor.execute("INSERT INTO emails_fts(emails_fts) VALUES('rebuild')")
+            conn.commit()
+            print("✓ FTS5 rebuild complete.")
+        except Exception as e:
+            print(f"✗ FTS5 rebuild failed: {e}")
+            
+        # 2. Rebuild ChromaDB
+        print("Rebuilding Vector index (this may take a while)...")
+        try:
+            collection = isolated_db._get_chroma_collection()
+            cursor.execute("SELECT * FROM emails")
+            rows = cursor.fetchall()
+            
+            # Batch upsert
+            batch_size = 50
+            for i in range(0, len(rows), batch_size):
+                batch = rows[i:i+batch_size]
+                ids = []
+                documents = []
+                metadatas = []
+                
+                for row in batch:
+                    email_dict = dict(row)
+                    doc_text = f"Subject: {email_dict.get('subject', '')}\nFrom: {email_dict.get('sender', '')}\nDate: {email_dict.get('date', '')}\n\n{email_dict.get('body_text', '')}"
+                    if len(doc_text) > 8000:
+                        doc_text = doc_text[:8000]
+                        
+                    ids.append(email_dict['message_id'])
+                    documents.append(doc_text)
+                    metadatas.append({
+                        "subject": email_dict.get('subject', '') or '',
+                        "sender": email_dict.get('sender', '') or '',
+                        "date": str(email_dict.get('date', ''))
+                    })
+                    
+                if ids:
+                    collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
+                print(f"  Processed {min(i+batch_size, len(rows))}/{len(rows)} emails...")
+                
+            print("✓ Vector index rebuild complete.")
+        except Exception as e:
+            print(f"✗ Vector index rebuild failed: {e}")
+
 def main():
     parser = argparse.ArgumentParser(description="Mail Manager CLI")
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
@@ -898,6 +954,10 @@ def main():
     thread_p.add_argument("message_id", help="Seed message_id to build the thread")
     thread_p.add_argument("--account", help="Account to read from")
     
+    # rebuild-index
+    rebuild_p = subparsers.add_parser("rebuild-index", help="Rebuild FTS5 and Vector search indices for existing emails")
+    rebuild_p.add_argument("--account", help="Account to rebuild indices for")
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -931,6 +991,8 @@ def main():
         cmd_summarize(args, config, db)
     elif args.command == "thread":
         cmd_thread(args, config, db)
+    elif args.command == "rebuild-index":
+        cmd_rebuild_index(args, config, db)
 
 if __name__ == "__main__":
     main()
