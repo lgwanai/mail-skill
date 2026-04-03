@@ -23,7 +23,15 @@ Transform Mail Skill from a basic email tool into an intelligent assistant. The 
   2. User can run mypy and see zero type errors
   3. User can run ruff and see all code passes lint checks
   4. All CLI commands return consistent JSON error structures when failing
-**Plans**: TBD
+**Plans**: 6 plans in 4 waves
+
+Plans:
+- [ ] 01-PLAN.md — Create foundational config files (pyproject.toml, requirements-dev.txt, errors.py, models.py)
+- [ ] 02-PLAN.md — Create test infrastructure with shared fixtures (conftest.py)
+- [ ] 03-PLAN.md — Add type annotations and tests for MailClient (client.py, test_client.py)
+- [ ] 04-PLAN.md — Add type annotations and tests for MailDatabase (db.py, test_db.py)
+- [ ] 05-PLAN.md — Migrate CLI to unified error handling and add CLI tests (mail_cli.py, test_cli.py, test_errors.py)
+- [ ] 06-PLAN.md — Apply ruff formatting/linting and verify coverage baseline
 
 ### Phase 2: Attachment Preview Service
 **Goal**: Users can preview and download email attachments via browser
@@ -77,7 +85,7 @@ Transform Mail Skill from a basic email tool into an intelligent assistant. The 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Code Quality Foundation | 0/TBD | Not started | - |
+| 1. Code Quality Foundation | 0/6 | Planning complete | - |
 | 2. Attachment Preview Service | 0/TBD | Not started | - |
 | 3. Natural Language Search | 0/TBD | Not started | - |
 | 4. Smart Classification | 0/TBD | Not started | - |
@@ -85,3 +93,4 @@ Transform Mail Skill from a basic email tool into an intelligent assistant. The 
 
 ---
 *Roadmap created: 2026-04-04*
+*Last updated: 2026-04-04 - Phase 1 plans created*
