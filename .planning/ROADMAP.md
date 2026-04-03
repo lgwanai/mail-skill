@@ -29,7 +29,7 @@ Plans:
 - [x] 01-PLAN.md — Create foundational config files (pyproject.toml, requirements-dev.txt, errors.py, models.py)
 - [x] 02-PLAN.md — Create test infrastructure with shared fixtures (conftest.py)
 - [x] 03-PLAN.md — Add type annotations and tests for MailClient (client.py, test_client.py)
-- [ ] 04-PLAN.md — Add type annotations and tests for MailDatabase (db.py, test_db.py)
+- [x] 04-PLAN.md — Add type annotations and tests for MailDatabase (db.py, test_db.py)
 - [ ] 05-PLAN.md — Migrate CLI to unified error handling and add CLI tests (mail_cli.py, test_cli.py, test_errors.py)
 - [ ] 06-PLAN.md — Apply ruff formatting/linting and verify coverage baseline
 
@@ -85,7 +85,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Code Quality Foundation | 3/6 | In progress | 01-PLAN, 02-PLAN, 03-PLAN |
+| 1. Code Quality Foundation | 4/6 | In progress | 01-PLAN, 02-PLAN, 03-PLAN, 04-PLAN |
 | 2. Attachment Preview Service | 0/TBD | Not started | - |
 | 3. Natural Language Search | 0/TBD | Not started | - |
 | 4. Smart Classification | 0/TBD | Not started | - |
@@ -93,4 +93,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-04-04*
-*Last updated: 2026-04-04 - Phase 1 plans 01-03 completed*
+*Last updated: 2026-04-04 - Phase 1 plans 01-04 completed*
