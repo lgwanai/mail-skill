@@ -1,0 +1,80 @@
+[project]
+name = "mail-skill"
+version = "2.0.0"
+description = "Intent-driven email management CLI with semantic search and ChromaDB"
+readme = "README.md"
+requires-python = ">=3.8"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--cov=scripts",
+    "--cov-report=term-missing",
+    "--cov-fail-under=60",  # Start at 60%, work up to 80%
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["scripts"]
+omit = [
+    "scripts/mail_cli.py",  # CLI entry, tested via integration tests
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = false  # Relaxed: allow Any returns
+warn_unused_configs = true
+disallow_untyped_defs = false  # Relaxed: gradual typing
+disallow_incomplete_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true  # For libraries without stubs
+
+[[tool.mypy.overrides]]
+module = [
+    "imap_tools.*",
+    "chromadb.*",
+    "sentence_transformers.*",
+]
+ignore_errors = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # function call in default argument
+    "C901",  # too complex (we have legacy code)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["mail_manager"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
