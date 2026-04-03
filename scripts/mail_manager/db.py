@@ -1,21 +1,32 @@
+from __future__ import annotations
+
 import sqlite3
 import json
-import os
 import logging
+import os
 from datetime import datetime
+from typing import Any, Optional
+
 import chromadb
 from chromadb.utils import embedding_functions
 
 logger = logging.getLogger(__name__)
 
 class MailDatabase:
-    def __init__(self, db_path):
+    """Manages email storage in SQLite and ChromaDB for vector search."""
+
+    def __init__(self, db_path: str) -> None:
+        """Initialize the database with the given path.
+
+        Args:
+            db_path: Path to the SQLite database file.
+        """
         self.db_path = db_path
         self._init_db()
-        self._chroma_client = None
-        self._collection = None
+        self._chroma_client: Optional[Any] = None
+        self._collection: Optional[Any] = None
 
-    def _get_chroma_collection(self):
+    def _get_chroma_collection(self) -> Any:
         if self._collection is None:
             chroma_dir = os.path.join(os.path.dirname(self.db_path), 'chroma_db')
             os.makedirs(chroma_dir, exist_ok=True)
@@ -50,13 +61,19 @@ class MailDatabase:
             )
         return self._collection
 
-    def _get_connection(self):
+    def _get_connection(self) -> sqlite3.Connection:
+        """Get a SQLite connection with row factory.
+
+        Returns:
+            sqlite3.Connection: A connection with Row factory enabled.
+        """
         os.makedirs(os.path.dirname(self.db_path) or '.', exist_ok=True)
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
 
-    def _init_db(self):
+    def _init_db(self) -> None:
+        """Initialize database schema including tables, indexes, and FTS."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -161,14 +178,26 @@ class MailDatabase:
                 
             conn.commit()
 
-    def exists(self, message_id):
+    def exists(self, message_id: str) -> bool:
+        """Check if an email with the given message_id exists.
+
+        Args:
+            message_id: The email message ID to check.
+
+        Returns:
+            bool: True if email exists, False otherwise.
+        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT 1 FROM emails WHERE message_id = ?', (message_id,))
             return cursor.fetchone() is not None
 
-    def save_email(self, email_data):
-        """Save or update email in the database"""
+    def save_email(self, email_data: dict) -> None:
+        """Save or update email in the database.
+
+        Args:
+            email_data: Dictionary containing email data.
+        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
             
@@ -252,8 +281,18 @@ class MailDatabase:
                 )
             except Exception as e:
                 logger.warning(f"Failed to save email to ChromaDB: {e}")
-            
-    def search_fts(self, query, limit=100, offset=0):
+
+    def search_fts(self, query: str, limit: int = 100, offset: int = 0) -> list[dict]:
+        """Full-text search for emails using FTS5 or LIKE fallback.
+
+        Args:
+            query: Search query string.
+            limit: Maximum number of results to return.
+            offset: Number of results to skip.
+
+        Returns:
+            list[dict]: List of matching email dictionaries.
+        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
             rows = []
@@ -295,8 +334,16 @@ class MailDatabase:
                 result.append(email_dict)
             return result
 
-    def search_vector(self, query, limit=10):
-        """Search emails using vector similarity"""
+    def search_vector(self, query: str, limit: int = 10) -> list[dict]:
+        """Search emails using vector similarity.
+
+        Args:
+            query: Search query string.
+            limit: Maximum number of results to return.
+
+        Returns:
+            list[dict]: List of matching email dictionaries.
+        """
         try:
             collection = self._get_chroma_collection()
             results = collection.query(
@@ -320,7 +367,12 @@ class MailDatabase:
             logger.error(f"Vector search failed: {e}")
             return []
 
-    def _get_reranker(self):
+    def _get_reranker(self) -> Any:
+        """Get or create the reranker model.
+
+        Returns:
+            CrossEncoder: The reranker model instance.
+        """
         if not hasattr(self, '_reranker'):
             from sentence_transformers import CrossEncoder
             reranker_model_name = os.getenv('RERANKER_MODEL_NAME', 'BAAI/bge-reranker-base')
@@ -328,8 +380,16 @@ class MailDatabase:
             self._reranker = CrossEncoder(reranker_model_name)
         return self._reranker
 
-    def search_hybrid(self, query, limit=10):
-        """Hybrid search combining FTS and Vector search, with Reranking"""
+    def search_hybrid(self, query: str, limit: int = 10) -> list[dict]:
+        """Hybrid search combining FTS and Vector search, with Reranking.
+
+        Args:
+            query: Search query string.
+            limit: Maximum number of results to return.
+
+        Returns:
+            list[dict]: List of matching email dictionaries sorted by relevance.
+        """
         # 1. Fetch candidates
         fts_results = self.search_fts(query, limit=limit*2)
         vec_results = self.search_vector(query, limit=limit*2)
@@ -369,8 +429,17 @@ class MailDatabase:
             
         return emails[:limit]
 
-    def get_thread_timeline(self, seed_message_id, limit=100):
-        def norm(mid):
+    def get_thread_timeline(self, seed_message_id: str, limit: int = 100) -> list[dict]:
+        """Get all emails in a thread starting from a seed message.
+
+        Args:
+            seed_message_id: The message ID to start from.
+            limit: Maximum number of emails to return.
+
+        Returns:
+            list[dict]: List of emails in the thread, sorted by date.
+        """
+        def norm(mid: Optional[str]) -> str:
             if not mid:
                 return ''
             m = mid.strip()
@@ -417,10 +486,38 @@ class MailDatabase:
                 timeline[i]['attachments'] = [dict(att) for att in att_rows]
             return timeline
 
-    def search_emails(self, query=None, account=None, folder=None, sender=None, 
-                      subject=None, date_from=None, date_to=None, has_attachment=None,
-                      is_read=None, limit=100, offset=0):
-        """Search emails based on criteria"""
+    def search_emails(
+        self,
+        query: Optional[str] = None,
+        account: Optional[str] = None,
+        folder: Optional[str] = None,
+        sender: Optional[str] = None,
+        subject: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        has_attachment: Optional[bool] = None,
+        is_read: Optional[bool] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> list[dict]:
+        """Search emails based on criteria.
+
+        Args:
+            query: Full-text search query.
+            account: Filter by account email.
+            folder: Filter by folder name.
+            sender: Filter by sender email (partial match).
+            subject: Filter by subject (partial match).
+            date_from: Filter by start date.
+            date_to: Filter by end date.
+            has_attachment: Filter by attachment presence.
+            is_read: Filter by read status.
+            limit: Maximum number of results.
+            offset: Number of results to skip.
+
+        Returns:
+            list[dict]: List of matching email dictionaries.
+        """
         sql = "SELECT * FROM emails WHERE 1=1"
         params = []
         
@@ -482,8 +579,15 @@ class MailDatabase:
                 
             return result
 
-    def get_email(self, message_id):
-        """Get a single email by message_id"""
+    def get_email(self, message_id: str) -> Optional[dict]:
+        """Get a single email by message_id.
+
+        Args:
+            message_id: The email message ID.
+
+        Returns:
+            Optional[dict]: Email dictionary or None if not found.
+        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM emails WHERE message_id = ?', (message_id,))
@@ -501,8 +605,23 @@ class MailDatabase:
             
             return email_dict
 
-    def update_flags(self, message_id, is_read=None, is_starred=None, labels=None, folder=None):
-        """Update flags or folder of an email"""
+    def update_flags(
+        self,
+        message_id: str,
+        is_read: Optional[bool] = None,
+        is_starred: Optional[bool] = None,
+        labels: Optional[list] = None,
+        folder: Optional[str] = None
+    ) -> None:
+        """Update flags or folder of an email.
+
+        Args:
+            message_id: The email message ID.
+            is_read: New read status, if updating.
+            is_starred: New starred status, if updating.
+            labels: New list of labels, if updating.
+            folder: New folder name, if updating.
+        """
         updates = []
         params = []
         
@@ -533,8 +652,12 @@ class MailDatabase:
             cursor.execute(sql, params)
             conn.commit()
 
-    def delete_email(self, message_id):
-        """Delete an email from database"""
+    def delete_email(self, message_id: str) -> None:
+        """Delete an email from database.
+
+        Args:
+            message_id: The email message ID to delete.
+        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM attachments WHERE message_id = ?', (message_id,))
