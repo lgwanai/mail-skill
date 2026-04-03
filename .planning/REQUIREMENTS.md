@@ -9,8 +9,8 @@
 
 - [ ] **QUAL-01**: 项目测试覆盖率达到 80%+，关键路径（fetch, search, send, reply）有完整测试
 - [ ] **QUAL-02**: 所有 Python 文件添加类型注解，通过 mypy 类型检查
-- [ ] **QUAL-03**: 统一错误处理格式，所有命令返回标准 JSON 结构 `{"status": "success|error", "code": "...", "message": "..."}`
-- [ ] **QUAL-04**: 使用 ruff 进行代码格式化和 lint，符合 PEP 8 规范
+- [x] **QUAL-03**: 统一错误处理格式，所有命令返回标准 JSON 结构 `{"status": "success|error", "code": "...", "message": "..."}`
+- [x] **QUAL-04**: 使用 ruff 进行代码格式化和 lint，符合 PEP 8 规范
 
 ### Natural Language Search (智能搜索)
 
@@ -89,8 +89,8 @@
 |-------------|-------|--------|
 | QUAL-01 | Phase 1 | Pending |
 | QUAL-02 | Phase 1 | Pending |
-| QUAL-03 | Phase 1 | Pending |
-| QUAL-04 | Phase 1 | Pending |
+| QUAL-03 | Phase 1 | Complete |
+| QUAL-04 | Phase 1 | Complete |
 | ATCH-01 | Phase 2 | Pending |
 | ATCH-02 | Phase 2 | Pending |
 | ATCH-03 | Phase 2 | Pending |
