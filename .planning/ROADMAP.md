@@ -77,7 +77,13 @@ Plans:
   3. User can filter emails by importance or category
   4. User can manually reclassify an email and see the change persist
   5. User can see classification confidence score
-**Plans**: TBD
+**Plans**: 4 plans in 4 waves
+
+Plans:
+- [ ] 04-00-PLAN.md — Test stubs and empty modules for TDD foundation (Wave 0)
+- [ ] 04-01-PLAN.md — Database schema extension with classification columns and rule loading (db.py, rules.py, classifier.py)
+- [ ] 04-02-PLAN.md — EmailClassifier implementation with rule matching and confidence scoring (classifier.py, test_classifier.py)
+- [ ] 04-03-PLAN.md — CLI integration for classification display, filtering, and reclassification (mail_cli.py, test_cli.py)
 
 ### Phase 5: User Experience Enhancement
 **Goal**: Users have efficient tools for reply, viewing, and batch operations
@@ -98,7 +104,7 @@ Plans:
 | 1. Code Quality Foundation | 6/6 | Complete | 01-PLAN, 02-PLAN, 03-PLAN, 04-PLAN, 05-PLAN, 06-PLAN |
 | 2. Attachment Preview Service | 2/2 | Complete | 02-01-PLAN, 02-02-PLAN |
 | 3. Natural Language Search | 3/4 | In Progress|  |
-| 4. Smart Classification | 0/TBD | Not started | - |
+| 4. Smart Classification | 0/4 | Not started | - |
 | 5. User Experience Enhancement | 0/TBD | Not started | - |
 | 6. Smart Enhancements | 0/TBD | Not started | - |
 
@@ -120,4 +126,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-04-04*
-*Last updated: 2026-04-04 - Phase 3 plans created*
+*Last updated: 2026-04-04 - Phase 4 plans created*
