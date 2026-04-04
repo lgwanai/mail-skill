@@ -1,12 +1,15 @@
 """
 Email classification module for importance and category labeling.
 
-Provides dataclasses for classification results and rules.
+Provides dataclasses for classification results and rules, and the EmailClassifier
+class for rule-based email classification.
 Uses from __future__ import annotations for Python 3.8 compatibility.
 """
 
 from __future__ import annotations
 
+import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 
 
@@ -73,3 +76,178 @@ class ClassificationResult:
     email_id: str
     classification: Classification
     processing_time_ms: float
+
+
+class EmailClassifier:
+    """
+    Rule-based email classifier.
+
+    Classifies emails using configurable rules for sender matching,
+    keyword matching, and pattern-based classification.
+
+    Attributes:
+        rules: List of Rule objects to use for classification
+    """
+
+    def __init__(self, rules_path: str | None = None) -> None:
+        """
+        Initialize the email classifier.
+
+        Args:
+            rules_path: Path to YAML rules configuration file.
+                        If None, uses default rules.
+        """
+        # Import here to avoid circular import with rules.py
+        from scripts.mail_manager.rules import load_rules
+
+        self.rules = load_rules(rules_path)
+
+    def _match_rule(self, rule: Rule, email: dict) -> bool:
+        """
+        Check if a rule matches an email.
+
+        Args:
+            rule: The rule to check
+            email: Email dict with sender, subject, body_text fields
+
+        Returns:
+            True if the rule matches, False otherwise
+        """
+        if rule.rule_type == "sender":
+            return self._match_sender(rule, email)
+        elif rule.rule_type == "sender_pattern":
+            return self._match_sender_pattern(rule, email)
+        elif rule.rule_type == "keyword":
+            return self._match_keyword(rule, email)
+        return False
+
+    def _match_sender(self, rule: Rule, email: dict) -> bool:
+        """
+        Check if sender rule matches email.
+
+        Performs case-insensitive substring matching on the sender field.
+
+        Args:
+            rule: Sender rule with patterns to match
+            email: Email dict with sender field
+
+        Returns:
+            True if any pattern matches the sender
+        """
+        sender = email.get("sender", "").lower()
+        for pattern in rule.patterns:
+            if pattern.lower() in sender:
+                return True
+        return False
+
+    def _match_sender_pattern(self, rule: Rule, email: dict) -> bool:
+        """
+        Check if sender pattern rule matches email using regex.
+
+        Args:
+            rule: Sender pattern rule with regex patterns
+            email: Email dict with sender field
+
+        Returns:
+            True if any regex pattern matches the sender
+        """
+        sender = email.get("sender", "")
+        for pattern in rule.patterns:
+            if re.search(pattern, sender, re.IGNORECASE):
+                return True
+        return False
+
+    def _match_keyword(self, rule: Rule, email: dict) -> bool:
+        """
+        Check if keyword rule matches email subject or body.
+
+        Performs case-insensitive substring matching on subject and body.
+        Only checks first 1000 characters of body for performance.
+
+        Args:
+            rule: Keyword rule with patterns to match
+            email: Email dict with subject and body_text fields
+
+        Returns:
+            True if any pattern matches subject or body
+        """
+        subject = email.get("subject", "").lower()
+        body = email.get("body_text", "").lower()[:1000]
+        for pattern in rule.patterns:
+            pattern_lower = pattern.lower()
+            if pattern_lower in subject or pattern_lower in body:
+                return True
+        return False
+
+    def classify(self, email: dict) -> Classification:
+        """
+        Classify an email using configured rules.
+
+        Applies all rules to the email and aggregates results using
+        weighted voting. Returns default classification if no rules match.
+
+        Args:
+            email: Email dict with sender, subject, body_text fields
+
+        Returns:
+            Classification with importance, category, confidence, and matched rules
+        """
+        matches: list[Rule] = []
+        for rule in self.rules:
+            if self._match_rule(rule, email):
+                matches.append(rule)
+
+        if not matches:
+            return Classification(
+                importance="normal",
+                category="uncategorized",
+                confidence=0.5,
+                matched_rules=[],
+            )
+
+        # Weighted voting for importance and category
+        importance_scores: dict[str, float] = defaultdict(float)
+        category_scores: dict[str, float] = defaultdict(float)
+        total_weight = 0.0
+
+        for rule in matches:
+            if rule.importance:
+                importance_scores[rule.importance] += rule.weight
+            if rule.category:
+                category_scores[rule.category] += rule.weight
+            total_weight += rule.weight
+
+        # Select highest scoring importance and category
+        importance = (
+            max(importance_scores, key=importance_scores.get)
+            if importance_scores
+            else "normal"
+        )
+        category = (
+            max(category_scores, key=category_scores.get)
+            if category_scores
+            else "uncategorized"
+        )
+
+        # Confidence: ratio of matched weight to total possible weight
+        max_possible_weight = sum(r.weight for r in self.rules) or 1.0
+        confidence = min(1.0, total_weight / max_possible_weight)
+
+        return Classification(
+            importance=importance,
+            category=category,
+            confidence=confidence,
+            matched_rules=[r.name for r in matches],
+        )
+
+    def classify_batch(self, emails: list[dict]) -> list[Classification]:
+        """
+        Classify multiple emails.
+
+        Args:
+            emails: List of email dicts
+
+        Returns:
+            List of Classification objects
+        """
+        return [self.classify(email) for email in emails]

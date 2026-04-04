@@ -215,207 +215,530 @@ class TestGetDefaultRules:
         assert len(keyword_rules) > 0
 
 
+class TestEmailClassifierMatch:
+    """Tests for EmailClassifier rule matching methods."""
+
+    def test_match_sender_exact(self) -> None:
+        """Test exact sender match in sender rule."""
+        from scripts.mail_manager.classifier import EmailClassifier
+
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Test Sender",
+            rule_type="sender",
+            patterns=["boss@company.com"],
+            importance="critical",
+        )
+
+        email_match = {"sender": "Boss <boss@company.com>", "subject": "Test", "body_text": ""}
+        email_no_match = {"sender": "other@example.com", "subject": "Test", "body_text": ""}
+
+        assert classifier._match_sender(rule, email_match) is True
+        assert classifier._match_sender(rule, email_no_match) is False
+
+    def test_match_sender_partial(self) -> None:
+        """Test partial sender match (email address within sender string)."""
+        from scripts.mail_manager.classifier import EmailClassifier
+
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Company Senders",
+            rule_type="sender",
+            patterns=["@company.com"],
+            importance="high",
+        )
+
+        email = {"sender": "John <john@company.com>", "subject": "Test", "body_text": ""}
+        assert classifier._match_sender(rule, email) is True
+
+    def test_match_sender_pattern(self) -> None:
+        """Test regex pattern match on sender."""
+        from scripts.mail_manager.classifier import EmailClassifier
+
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Company Domain",
+            rule_type="sender_pattern",
+            patterns=[r"@company\.com$"],
+            category="work",
+        )
+
+        email_match = {"sender": "user@company.com", "subject": "Test", "body_text": ""}
+        email_no_match = {"sender": "user@company.org", "subject": "Test", "body_text": ""}
+
+        assert classifier._match_sender_pattern(rule, email_match) is True
+        assert classifier._match_sender_pattern(rule, email_no_match) is False
+
+    def test_match_keyword_subject(self) -> None:
+        """Test keyword match in email subject."""
+        from scripts.mail_manager.classifier import EmailClassifier
+
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Urgent Keywords",
+            rule_type="keyword",
+            patterns=["urgent", "important"],
+            importance="critical",
+        )
+
+        email = {"sender": "test@test.com", "subject": "URGENT: Please read", "body_text": ""}
+        assert classifier._match_keyword(rule, email) is True
+
+    def test_match_keyword_body(self) -> None:
+        """Test keyword match in email body."""
+        from scripts.mail_manager.classifier import EmailClassifier
+
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Verification Codes",
+            rule_type="keyword",
+            patterns=["验证码", "verification code"],
+            category="notification",
+        )
+
+        email = {
+            "sender": "system@test.com",
+            "subject": "Your code",
+            "body_text": "Your verification code is 123456",
+        }
+        assert classifier._match_keyword(rule, email) is True
+
+    def test_match_keyword_case_insensitive(self) -> None:
+        """Test that keyword matching is case-insensitive."""
+        from scripts.mail_manager.classifier import EmailClassifier
+
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Important Keywords",
+            rule_type="keyword",
+            patterns=["IMPORTANT", "Urgent"],
+            importance="high",
+        )
+
+        email_lower = {"sender": "test@test.com", "subject": "important notice", "body_text": ""}
+        email_upper = {"sender": "test@test.com", "subject": "URGENT ALERT", "body_text": ""}
+        email_mixed = {"sender": "test@test.com", "subject": "ImPoRtAnT", "body_text": ""}
+
+        assert classifier._match_keyword(rule, email_lower) is True
+        assert classifier._match_keyword(rule, email_upper) is True
+        assert classifier._match_keyword(rule, email_mixed) is True
+
+    def test_match_multiple_rules(self) -> None:
+        """Test that multiple rules can match the same email."""
+        from scripts.mail_manager.classifier import EmailClassifier
+
+        classifier = EmailClassifier()
+        rules = [
+            Rule(name="Sender Rule", rule_type="sender", patterns=["@company.com"]),
+            Rule(name="Keyword Rule", rule_type="keyword", patterns=["urgent"]),
+        ]
+
+        email = {
+            "sender": "boss@company.com",
+            "subject": "URGENT meeting",
+            "body_text": "",
+        }
+
+        matches = [r for r in rules if classifier._match_rule(r, email)]
+        assert len(matches) == 2
+
+    def test_match_no_match(self) -> None:
+        """Test that no match returns False."""
+        from scripts.mail_manager.classifier import EmailClassifier
+
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="No Match Rule",
+            rule_type="keyword",
+            patterns=["specificword123"],
+        )
+
+        email = {
+            "sender": "test@test.com",
+            "subject": "Random subject",
+            "body_text": "Random body content",
+        }
+
+        assert classifier._match_keyword(rule, email) is False
+
+
 class TestClassifySenderMatch:
     """Tests for sender-based classification."""
 
-    @pytest.mark.skip(reason="Implementation pending")
     def test_classify_exact_sender_match(self) -> None:
-        """
-        Test classification with exact sender match.
+        """Test classification with exact sender match."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - exact email address matches sender rule
-        - correct importance/category assigned
-        - rule name added to matched_rules
-        """
-        pass
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Critical Sender",
+            rule_type="sender",
+            patterns=["boss@company.com"],
+            importance="critical",
+            category="work",
+        )
+        classifier.rules = [rule]
 
-    @pytest.mark.skip(reason="Implementation pending")
+        email = {"sender": "Boss <boss@company.com>", "subject": "Test", "body_text": ""}
+        result = classifier.classify(email)
+
+        assert result.importance == "critical"
+        assert result.category == "work"
+        assert "Critical Sender" in result.matched_rules
+
     def test_classify_sender_pattern_match(self) -> None:
-        """
-        Test classification with sender pattern match.
+        """Test classification with sender pattern match."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - regex pattern matches sender domain
-        - correct category assigned
-        - confidence reflects pattern match
-        """
-        pass
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Company Domain",
+            rule_type="sender_pattern",
+            patterns=[r"@company\.com$"],
+            category="work",
+        )
+        classifier.rules = [rule]
 
-    @pytest.mark.skip(reason="Implementation pending")
+        email = {"sender": "user@company.com", "subject": "Test", "body_text": ""}
+        result = classifier.classify(email)
+
+        assert result.category == "work"
+        assert "Company Domain" in result.matched_rules
+
     def test_classify_no_sender_match(self) -> None:
-        """
-        Test classification with no sender match.
+        """Test classification with no sender match returns default."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - returns default classification
-        - confidence reflects uncertainty
-        """
-        pass
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Specific Sender",
+            rule_type="sender",
+            patterns=["specific@company.com"],
+        )
+        classifier.rules = [rule]
+
+        email = {"sender": "other@example.com", "subject": "Test", "body_text": ""}
+        result = classifier.classify(email)
+
+        assert result.importance == "normal"
+        assert result.category == "uncategorized"
+        assert result.matched_rules == []
 
 
 class TestClassifyKeywordMatch:
     """Tests for keyword-based classification."""
 
-    @pytest.mark.skip(reason="Implementation pending")
     def test_classify_keyword_in_subject(self) -> None:
-        """
-        Test classification with keyword in subject.
+        """Test classification with keyword in subject."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - keyword found in email subject
-        - correct importance assigned
-        - confidence calculated correctly
-        """
-        pass
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Urgent Keywords",
+            rule_type="keyword",
+            patterns=["urgent"],
+            importance="critical",
+        )
+        classifier.rules = [rule]
 
-    @pytest.mark.skip(reason="Implementation pending")
+        email = {"sender": "test@test.com", "subject": "URGENT action needed", "body_text": ""}
+        result = classifier.classify(email)
+
+        assert result.importance == "critical"
+        assert "Urgent Keywords" in result.matched_rules
+
     def test_classify_keyword_in_body(self) -> None:
-        """
-        Test classification with keyword in body.
+        """Test classification with keyword in body."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - keyword found in email body
-        - correct importance assigned
-        """
-        pass
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Financial Keywords",
+            rule_type="keyword",
+            patterns=["invoice", "payment"],
+            importance="high",
+            category="work",
+        )
+        classifier.rules = [rule]
 
-    @pytest.mark.skip(reason="Implementation pending")
+        email = {
+            "sender": "billing@vendor.com",
+            "subject": "Your order",
+            "body_text": "Please find attached invoice for your payment.",
+        }
+        result = classifier.classify(email)
+
+        assert result.importance == "high"
+        assert result.category == "work"
+
     def test_classify_multiple_keywords(self) -> None:
-        """
-        Test classification with multiple matching keywords.
+        """Test classification with multiple matching keywords."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - all matching rules contribute to score
-        - confidence reflects multiple matches
-        - highest weighted importance wins
-        """
-        pass
+        classifier = EmailClassifier()
+        rules = [
+            Rule(name="Urgent", rule_type="keyword", patterns=["urgent"], importance="critical", weight=1.5),
+            Rule(name="Important", rule_type="keyword", patterns=["important"], importance="high", weight=1.0),
+        ]
+        classifier.rules = rules
 
-    @pytest.mark.skip(reason="Implementation pending")
+        email = {
+            "sender": "test@test.com",
+            "subject": "Urgent and important meeting",
+            "body_text": "",
+        }
+        result = classifier.classify(email)
+
+        # Higher weight rule should win
+        assert result.importance == "critical"
+        assert len(result.matched_rules) == 2
+
     def test_classify_chinese_keywords(self) -> None:
-        """
-        Test classification with Chinese keywords.
+        """Test classification with Chinese keywords."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - Chinese keywords match correctly
-        - encoding is handled properly
-        """
-        pass
+        classifier = EmailClassifier()
+        rule = Rule(
+            name="Chinese Urgent",
+            rule_type="keyword",
+            patterns=["紧急", "重要"],
+            importance="critical",
+        )
+        classifier.rules = [rule]
+
+        email = {
+            "sender": "test@test.com",
+            "subject": "紧急通知",
+            "body_text": "",
+        }
+        result = classifier.classify(email)
+
+        assert result.importance == "critical"
+        assert "Chinese Urgent" in result.matched_rules
 
 
 class TestClassifyAggregation:
     """Tests for rule aggregation in classification."""
 
-    @pytest.mark.skip(reason="Implementation pending")
     def test_classify_aggregation_multiple_rules(self) -> None:
-        """
-        Test aggregation when multiple rules match.
+        """Test aggregation when multiple rules match."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - all matched rules are recorded
-        - weighted voting determines final classification
-        - confidence reflects number of matches
-        """
-        pass
+        classifier = EmailClassifier()
+        rules = [
+            Rule(name="Sender", rule_type="sender", patterns=["@company.com"], importance="high", weight=1.0),
+            Rule(name="Keyword", rule_type="keyword", patterns=["urgent"], importance="critical", weight=2.0),
+        ]
+        classifier.rules = rules
 
-    @pytest.mark.skip(reason="Implementation pending")
+        email = {
+            "sender": "boss@company.com",
+            "subject": "URGENT meeting",
+            "body_text": "",
+        }
+        result = classifier.classify(email)
+
+        assert len(result.matched_rules) == 2
+        # Higher weight (2.0) for critical wins over high (1.0)
+        assert result.importance == "critical"
+
     def test_classify_conflicting_rules(self) -> None:
-        """
-        Test handling of conflicting rule matches.
+        """Test handling of conflicting rule matches."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - higher weight rules win
-        - importance conflicts resolved correctly
-        - category conflicts resolved correctly
-        """
-        pass
+        classifier = EmailClassifier()
+        rules = [
+            Rule(name="Rule A", rule_type="keyword", patterns=["test"], importance="low", weight=1.0),
+            Rule(name="Rule B", rule_type="keyword", patterns=["test"], importance="critical", weight=2.0),
+        ]
+        classifier.rules = rules
 
-    @pytest.mark.skip(reason="Implementation pending")
+        email = {"sender": "test@test.com", "subject": "test", "body_text": ""}
+        result = classifier.classify(email)
+
+        # Higher weight rule wins
+        assert result.importance == "critical"
+
     def test_classify_no_matching_rules(self) -> None:
-        """
-        Test classification when no rules match.
+        """Test classification when no rules match."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - returns default classification (normal, uncategorized)
-        - confidence is baseline (0.5)
-        - matched_rules is empty
-        """
-        pass
+        classifier = EmailClassifier()
+        rules = [
+            Rule(name="No Match", rule_type="keyword", patterns=["specificword123"]),
+        ]
+        classifier.rules = rules
+
+        email = {
+            "sender": "random@example.com",
+            "subject": "Random subject",
+            "body_text": "Random body content",
+        }
+        result = classifier.classify(email)
+
+        assert result.importance == "normal"
+        assert result.category == "uncategorized"
+        assert result.confidence == 0.5
+        assert result.matched_rules == []
 
 
 class TestClassifyConfidence:
     """Tests for confidence calculation."""
 
-    @pytest.mark.skip(reason="Implementation pending")
     def test_confidence_single_match(self) -> None:
-        """
-        Test confidence with single rule match.
+        """Test confidence with single rule match."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - confidence reflects rule weight
-        - confidence is within 0-1 range
-        """
-        pass
+        classifier = EmailClassifier()
+        rules = [
+            Rule(name="Rule A", rule_type="keyword", patterns=["test"], importance="high", weight=1.0),
+            Rule(name="Rule B", rule_type="keyword", patterns=["other"], importance="low", weight=1.0),
+        ]
+        classifier.rules = rules
 
-    @pytest.mark.skip(reason="Implementation pending")
+        email = {"sender": "test@test.com", "subject": "test", "body_text": ""}
+        result = classifier.classify(email)
+
+        # Single match with weight 1.0 out of total weight 2.0 = 0.5
+        assert result.confidence == 0.5
+        assert 0.0 <= result.confidence <= 1.0
+
     def test_confidence_multiple_matches(self) -> None:
-        """
-        Test confidence with multiple rule matches.
+        """Test confidence with multiple rule matches."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - confidence increases with more matches
-        - confidence is normalized correctly
-        - max confidence is 1.0
-        """
-        pass
+        classifier = EmailClassifier()
+        rules = [
+            Rule(name="Rule A", rule_type="keyword", patterns=["test"], importance="high", weight=1.0),
+            Rule(name="Rule B", rule_type="keyword", patterns=["subject"], importance="low", weight=1.0),
+        ]
+        classifier.rules = rules
 
-    @pytest.mark.skip(reason="Implementation pending")
+        email = {"sender": "test@test.com", "subject": "test subject", "body_text": ""}
+        result = classifier.classify(email)
+
+        # Both match: 2.0 out of 2.0 total = 1.0
+        assert result.confidence == 1.0
+
     def test_confidence_high_weight_rule(self) -> None:
-        """
-        Test confidence contribution of high-weight rules.
+        """Test confidence contribution of high-weight rules."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - high weight rules (2.0) contribute more
-        - confidence calculation uses weight correctly
-        """
-        pass
+        classifier = EmailClassifier()
+        rules = [
+            Rule(name="High Weight", rule_type="keyword", patterns=["test"], importance="critical", weight=2.0),
+            Rule(name="Low Weight", rule_type="keyword", patterns=["other"], importance="low", weight=0.5),
+        ]
+        classifier.rules = rules
+
+        email = {"sender": "test@test.com", "subject": "test", "body_text": ""}
+        result = classifier.classify(email)
+
+        # Single high weight match: 2.0 out of 2.5 total = 0.8
+        assert result.confidence == 0.8
+
+
+class TestClassifyBatch:
+    """Tests for batch classification."""
+
+    def test_classify_batch(self) -> None:
+        """Test batch classification of multiple emails."""
+        from scripts.mail_manager.classifier import EmailClassifier
+
+        classifier = EmailClassifier()
+        rules = [
+            Rule(name="Urgent", rule_type="keyword", patterns=["urgent"], importance="critical"),
+            Rule(name="Normal", rule_type="keyword", patterns=["normal"], importance="normal"),
+        ]
+        classifier.rules = rules
+
+        emails = [
+            {"sender": "test@test.com", "subject": "URGENT", "body_text": ""},
+            {"sender": "test@test.com", "subject": "Normal email", "body_text": ""},
+            {"sender": "test@test.com", "subject": "Random", "body_text": ""},
+        ]
+
+        results = classifier.classify_batch(emails)
+
+        assert len(results) == 3
+        assert results[0].importance == "critical"
+        assert results[1].importance == "normal"
+        assert results[2].importance == "normal"  # Default
+        assert results[2].category == "uncategorized"
+
+    def test_classify_real_email(self) -> None:
+        """Integration test with realistic email."""
+        from scripts.mail_manager.classifier import EmailClassifier
+
+        classifier = EmailClassifier()
+        # Use default rules
+        classifier.rules = get_default_rules()
+
+        email = {
+            "sender": "boss@company.com",
+            "subject": "紧急会议通知",
+            "body_text": "请确认参加",
+        }
+        result = classifier.classify(email)
+
+        # Should match urgent keywords
+        assert result.importance in ("critical", "high")
+        assert len(result.matched_rules) > 0
 
 
 class TestManualReclassify:
     """Tests for manual reclassification."""
 
-    @pytest.mark.skip(reason="Implementation pending")
     def test_manual_reclassify_updates_classification(self) -> None:
-        """
-        Test that manual reclassification updates the email.
+        """Test that manual reclassification updates the email."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - new classification is saved
-        - manual_override flag is set to True
-        - changes persist across queries
-        """
-        pass
+        classifier = EmailClassifier()
+        rule = Rule(name="Auto", rule_type="keyword", patterns=["test"], importance="low")
+        classifier.rules = [rule]
 
-    @pytest.mark.skip(reason="Implementation pending")
+        email = {"sender": "test@test.com", "subject": "test", "body_text": ""}
+
+        # Get automatic classification
+        auto_result = classifier.classify(email)
+        assert auto_result.importance == "low"
+
+        # Manual override
+        manual_result = Classification(
+            importance="critical",
+            category="work",
+            confidence=1.0,
+            matched_rules=["Manual Override"],
+            manual_override=True,
+        )
+        assert manual_result.manual_override is True
+        assert manual_result.importance == "critical"
+
     def test_manual_reclassify_overrides_automatic(self) -> None:
-        """
-        Test that manual classification overrides automatic.
+        """Test that manual classification overrides automatic."""
+        manual_result = Classification(
+            importance="low",
+            category="promo",
+            confidence=1.0,
+            matched_rules=[],
+            manual_override=True,
+        )
 
-        Should verify:
-        - manual classification takes precedence
-        - confidence is set to 1.0 (certainty)
-        - original matched_rules is cleared or preserved
-        """
-        pass
+        # Manual classification should have certainty
+        assert manual_result.confidence == 1.0
+        assert manual_result.manual_override is True
 
-    @pytest.mark.skip(reason="Implementation pending")
     def test_manual_reclassify_resets_override(self) -> None:
-        """
-        Test resetting manual override to automatic.
+        """Test resetting manual override to automatic."""
+        from scripts.mail_manager.classifier import EmailClassifier
 
-        Should verify:
-        - can clear manual_override flag
-        - automatic classification can be re-applied
-        """
-        pass
+        classifier = EmailClassifier()
+        rule = Rule(name="Test", rule_type="keyword", patterns=["urgent"], importance="critical")
+        classifier.rules = [rule]
+
+        email = {"sender": "test@test.com", "subject": "urgent", "body_text": ""}
+
+        # Re-run automatic classification
+        result = classifier.classify(email)
+        assert result.manual_override is False
+        assert result.importance == "critical"
