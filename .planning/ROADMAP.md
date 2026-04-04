@@ -97,7 +97,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Code Quality Foundation | 6/6 | Complete | 01-PLAN, 02-PLAN, 03-PLAN, 04-PLAN, 05-PLAN, 06-PLAN |
 | 2. Attachment Preview Service | 2/2 | Complete | 02-01-PLAN, 02-02-PLAN |
-| 3. Natural Language Search | 2/4 | In Progress | 03-00-PLAN, 03-01-PLAN |
+| 3. Natural Language Search | 3/4 | In Progress|  |
 | 4. Smart Classification | 0/TBD | Not started | - |
 | 5. User Experience Enhancement | 0/TBD | Not started | - |
 | 6. Smart Enhancements | 0/TBD | Not started | - |
