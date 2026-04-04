@@ -696,6 +696,53 @@ class MailDatabase:
             cursor.execute(sql, params)
             conn.commit()
 
+    def update_classification(
+        self,
+        message_id: str,
+        importance: str | None = None,
+        category: str | None = None,
+        confidence: float | None = None,
+        manual_override: bool | None = None,
+    ) -> None:
+        """Update classification fields of an email.
+
+        Args:
+            message_id: The email message ID.
+            importance: New importance level (critical, high, normal, low).
+            category: New category (work, personal, notification, promo, uncategorized).
+            confidence: Classification confidence score (0.0 to 1.0).
+            manual_override: Whether this is a manual classification override.
+        """
+        updates: list[str] = []
+        params: list[Any] = []
+
+        if importance is not None:
+            updates.append("importance = ?")
+            params.append(importance)
+
+        if category is not None:
+            updates.append("category = ?")
+            params.append(category)
+
+        if confidence is not None:
+            updates.append("classification_confidence = ?")
+            params.append(confidence)
+
+        if manual_override is not None:
+            updates.append("manual_override = ?")
+            params.append(manual_override)
+
+        if not updates:
+            return
+
+        sql = f"UPDATE emails SET {', '.join(updates)} WHERE message_id = ?"
+        params.append(message_id)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql, params)
+            conn.commit()
+
     def delete_email(self, message_id: str) -> None:
         """Delete an email from database.
 

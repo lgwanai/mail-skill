@@ -368,3 +368,88 @@ class TestClassificationColumns:
         assert result["category"] == "uncategorized"
         assert result["classification_confidence"] == 0.0
         assert result["manual_override"] in (False, 0)  # SQLite may return 0 for False
+
+
+class TestUpdateClassification:
+    """Tests for update_classification method."""
+
+    @pytest.fixture
+    def db(self, temp_db_path, mock_chroma_collection):
+        """Create a MailDatabase with temp storage."""
+        return MailDatabase(temp_db_path)
+
+    def test_update_classification_sets_all_fields(self, db, sample_email_data):
+        """Test update_classification sets importance, category, confidence."""
+        db.save_email(sample_email_data)
+
+        db.update_classification(
+            sample_email_data["message_id"],
+            importance="high",
+            category="work",
+            confidence=0.85,
+        )
+
+        result = db.get_email(sample_email_data["message_id"])
+        assert result["importance"] == "high"
+        assert result["category"] == "work"
+        assert result["classification_confidence"] == 0.85
+
+    def test_update_classification_sets_manual_override(self, db, sample_email_data):
+        """Test update_classification sets manual_override flag."""
+        db.save_email(sample_email_data)
+
+        db.update_classification(
+            sample_email_data["message_id"],
+            importance="critical",
+            manual_override=True,
+        )
+
+        result = db.get_email(sample_email_data["message_id"])
+        assert result["importance"] == "critical"
+        assert result["manual_override"] in (True, 1)  # SQLite may return 1 for True
+
+    def test_update_classification_partial_update(self, db, sample_email_data):
+        """Test update_classification only updates specified fields."""
+        db.save_email(sample_email_data)
+
+        # First update
+        db.update_classification(
+            sample_email_data["message_id"],
+            importance="high",
+            category="work",
+            confidence=0.9,
+        )
+
+        # Second update - only change importance
+        db.update_classification(
+            sample_email_data["message_id"],
+            importance="critical",
+        )
+
+        result = db.get_email(sample_email_data["message_id"])
+        assert result["importance"] == "critical"
+        assert result["category"] == "work"  # Should remain unchanged
+        assert result["classification_confidence"] == 0.9  # Should remain unchanged
+
+    def test_get_email_includes_classification(self, db, sample_email_data):
+        """Test get_email returns classification fields."""
+        db.save_email(sample_email_data)
+
+        result = db.get_email(sample_email_data["message_id"])
+        assert result is not None
+        assert "importance" in result
+        assert "category" in result
+        assert "classification_confidence" in result
+        assert "manual_override" in result
+
+    def test_search_emails_includes_classification(self, db, sample_email_data):
+        """Test search_emails returns classification fields in results."""
+        db.save_email(sample_email_data)
+
+        results = db.search_emails(sender="sender@example.com")
+        assert len(results) >= 1
+        result = results[0]
+        assert "importance" in result
+        assert "category" in result
+        assert "classification_confidence" in result
+        assert "manual_override" in result
