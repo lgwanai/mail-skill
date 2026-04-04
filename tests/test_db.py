@@ -6,7 +6,6 @@ Uses temp_db_path fixture for test isolation.
 """
 
 import pytest
-from datetime import datetime
 
 from mail_manager.db import MailDatabase
 
@@ -28,9 +27,7 @@ class TestMailDatabase:
 
         conn = sqlite3.connect(db.db_path)
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='emails'"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='emails'")
         result = cursor.fetchone()
         conn.close()
         assert result is not None
@@ -41,9 +38,7 @@ class TestMailDatabase:
 
         conn = sqlite3.connect(db.db_path)
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='attachments'"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='attachments'")
         result = cursor.fetchone()
         conn.close()
         assert result is not None
@@ -240,3 +235,55 @@ class TestMailDatabase:
             sender="sender@example.com", folder="Sent", account="test@example.com"
         )
         assert len(results) == 0
+
+    def test_get_unique_senders_returns_list(self, db, sample_email_data):
+        """Test get_unique_senders returns list of unique sender strings."""
+        db.save_email(sample_email_data)
+
+        senders = db.get_unique_senders()
+        assert isinstance(senders, list)
+        assert len(senders) >= 1
+        assert sample_email_data["sender"] in senders
+
+    def test_get_unique_senders_empty_database(self, db):
+        """Test get_unique_senders returns empty list for empty database."""
+        senders = db.get_unique_senders()
+        assert isinstance(senders, list)
+        assert len(senders) == 0
+
+    def test_get_unique_senders_deduplicates(self, db, sample_email_data):
+        """Test get_unique_senders removes duplicate senders."""
+        # Save same sender multiple times
+        for i in range(3):
+            email_data = sample_email_data.copy()
+            email_data["message_id"] = f"test-msg-{i}@example.com"
+            email_data["sender"] = "same_sender@example.com"
+            db.save_email(email_data)
+
+        senders = db.get_unique_senders()
+        assert senders.count("same_sender@example.com") == 1
+
+    def test_get_unique_senders_excludes_none_and_empty(self, db, sample_email_data):
+        """Test get_unique_senders excludes None and empty sender values."""
+        # Save email with None sender
+        email1 = sample_email_data.copy()
+        email1["message_id"] = "msg-none@example.com"
+        email1["sender"] = None
+        db.save_email(email1)
+
+        # Save email with empty sender
+        email2 = sample_email_data.copy()
+        email2["message_id"] = "msg-empty@example.com"
+        email2["sender"] = ""
+        db.save_email(email2)
+
+        # Save email with valid sender
+        email3 = sample_email_data.copy()
+        email3["message_id"] = "msg-valid@example.com"
+        email3["sender"] = "valid@example.com"
+        db.save_email(email3)
+
+        senders = db.get_unique_senders()
+        assert None not in senders
+        assert "" not in senders
+        assert "valid@example.com" in senders
