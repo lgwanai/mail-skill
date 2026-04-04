@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-smart-classification/02-PLAN.md
-last_updated: "2026-04-04T14:30:14.331Z"
-last_activity: "2026-04-04 - Completed Phase 4 Plan 02: EmailClassifier Implementation"
+stopped_at: Completed 05-user-experience-enhancement/02-PLAN.md
+last_updated: "2026-04-04T16:13:48.088Z"
+last_activity: "2026-04-04 - Completed Phase 5 Plan 02: Email Detail Formatting"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 16
-  completed_plans: 16
-  percent: 59
+  total_plans: 22
+  completed_plans: 17
+  percent: 68
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** Let email management transform from "manual operations" to "intent-driven"
-**Current focus:** Phase 4: Smart Classification - Plan 02 Complete
+**Current focus:** Phase 5: User Experience Enhancement - Plan 02 Complete
 
 ## Current Position
 
-Phase: 4 of 6 (Smart Classification) - In Progress
-Plan: 2 of 4 in current phase
+Phase: 5 of 6 (User Experience Enhancement) - In Progress
+Plan: 2 of 6 in current phase
 Status: In Progress
-Last activity: 2026-04-04 - Completed Phase 4 Plan 02: EmailClassifier Implementation
+Last activity: 2026-04-04 - Completed Phase 5 Plan 02: Email Detail Formatting
 
-Progress: [======----] 59%
+Progress: [=======---] 68%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
+- Total plans completed: 17
 - Average duration: 4 min
-- Total execution time: 62 min
+- Total execution time: 67 min
 
 **By Phase:**
 
@@ -47,15 +47,16 @@ Progress: [======----] 59%
 | 02-attachment-preview-service | 2 | 10 min | 5 min |
 | 03-natural-language-search | 3 | 16 min | 5 min |
 | 04-smart-classification | 3 | 16 min | 5.3 min |
+| 05-user-experience-enhancement | 1 | 5 min | 5 min |
 
 **Recent Trend:**
-- Phase 4 Plan 00 (TDD foundation) completed successfully
-- Phase 4 Plan 01 (database schema) completed successfully
-- Phase 4 Plan 02 (EmailClassifier) completed successfully
-- EmailClassifier ready for CLI integration
+- Phase 5 Plan 02 (Detail Formatting) completed successfully
+- Email detail now formatted as Markdown with all relevant info
+- Ready for CLI integration
 
 *Updated after each plan completion*
-| Phase 04-smart-classification P02 | 5 | 2 tasks | 2 files |
+| Phase 05-user-experience-enhancement P02 | 5 | 5 tasks | 2 files |
+| Phase 05-user-experience-enhancement P02 | 5min | 5 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -80,41 +81,47 @@ Recent decisions affecting current work:
 - [Phase 04-smart-classification P02]: Deferred load_rules import to __init__ to avoid circular import
 - [Phase 04-smart-classification P02]: Keyword matching limited to first 1000 chars of body for performance
 - [Phase 04-smart-classification P02]: Confidence calculated as ratio of matched weight to total possible weight
+- [Phase 05-user-experience-enhancement P02]: Single detail.py module with pure functions for testability
+- [Phase 05-user-experience-enhancement P02]: Subject truncation to 50 characters for thread context readability
+- [Phase 05-user-experience-enhancement P02]: Confidence score hidden when < 0.5 or manual_override is True
+- [Phase 05-user-experience-enhancement]: Single detail.py module with pure functions for testability
+- [Phase 05-user-experience-enhancement]: Subject truncation to 50 characters for thread context readability
+- [Phase 05-user-experience-enhancement]: Confidence score hidden when < 0.5 or manual_override is True
 
 ### Pending Todos
 
-None - Phase 4 Plan 02 complete.
+None - Phase 5 Plan 02 complete.
 
 ### Blockers/Concerns
 
-None - Phase 4 Plan 02 complete.
+None - Phase 5 Plan 02 complete.
 
 ### Roadmap Evolution
 
 - Phase 6 added: Smart Enhancements (邮件关联、附件解读、大模型润色)
 
-## Phase 4 Plan 02 Success Criteria
+## Phase 5 Plan 02 Success Criteria
 
 All success criteria met:
 
-1. EmailClassifier class fully implemented with classify() method
-2. All rule types (sender, sender_pattern, keyword) work correctly
-3. Weighted voting produces correct importance/category
-4. Confidence score calculated correctly
-5. All tests pass with >90% coverage on classifier.py (actual: 99%)
+1. Email detail output is formatted as Markdown
+2. All headers visible (from, to, cc, date, subject)
+3. Classification info displayed (importance, category, confidence)
+4. Attachments listed with preview links
+5. Thread context shows parent/reply emails
 
 ## Session Continuity
 
-Last session: 2026-04-04T13:50:44.000Z
-Stopped at: Completed 04-smart-classification/02-PLAN.md
+Last session: 2026-04-04T16:13:48.086Z
+Stopped at: Completed 05-user-experience-enhancement/02-PLAN.md
 Resume file: None
 
 ## Next Plan
 
-Phase 4 Plan 3: CLI Integration
-- Goal: Integrate EmailClassifier into CLI for email classification
-- Requirements: CLAS-04
-- Plans: 04-03-PLAN.md (need to run /gsd:execute-phase for next plan)
+Phase 5 Plan 3: CLI Integration for Detail View
+- Goal: Integrate detail formatting into CLI commands
+- Requirements: DET-06
+- Plans: 05-03-PLAN.md (need to run /gsd:execute-phase for next plan)
 
 ---
 *State initialized: 2026-04-04*

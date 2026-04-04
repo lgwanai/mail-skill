@@ -47,11 +47,11 @@
 
 ### Email Detail Enhancement (邮件详情优化)
 
-- [ ] **DET-01**: 邮件详情展示优化，支持 Markdown 格式输出
-- [ ] **DET-02**: 显示完整邮件头信息（发件人、收件人、抄送、时间、主题）
-- [ ] **DET-03**: 显示分类信息（重要性、类别）
-- [ ] **DET-04**: 附件列表带预览链接
-- [ ] **DET-05**: 显示邮件线程上下文（父邮件/回复邮件）
+- [x] **DET-01**: 邮件详情展示优化，支持 Markdown 格式输出
+- [x] **DET-02**: 显示完整邮件头信息（发件人、收件人、抄送、时间、主题）
+- [x] **DET-03**: 显示分类信息（重要性、类别）
+- [x] **DET-04**: 附件列表带预览链接
+- [x] **DET-05**: 显示邮件线程上下文（父邮件/回复邮件）
 
 ### Mark Enhancement (标记增强)
 
@@ -112,11 +112,11 @@
 | TMPL-03 | Phase 5 | Pending |
 | TMPL-04 | Phase 5 | Pending |
 | TMPL-05 | Phase 5 | Pending |
-| DET-01 | Phase 5 | Pending |
-| DET-02 | Phase 5 | Pending |
-| DET-03 | Phase 5 | Pending |
-| DET-04 | Phase 5 | Pending |
-| DET-05 | Phase 5 | Pending |
+| DET-01 | Phase 5 | Complete |
+| DET-02 | Phase 5 | Complete |
+| DET-03 | Phase 5 | Complete |
+| DET-04 | Phase 5 | Complete |
+| DET-05 | Phase 5 | Complete |
 | MARK-01 | Phase 5 | Pending |
 | MARK-02 | Phase 5 | Pending |
 | MARK-03 | Phase 5 | Pending |
