@@ -25,9 +25,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mail_manager.client import MailClient
 from mail_manager.db import MailDatabase
+from mail_manager.detail import format_email_detail
 from mail_manager.errors import ErrorCodes, error_response, success_response
 from mail_manager.query_parser import ParsedQuery, match_senders, parse_natural_query
 from mail_manager.server import AttachmentServer, ServerState
+from mail_manager.templates import TemplateManager
 
 if TYPE_CHECKING:
     from mail_manager.client import MailClient
@@ -404,6 +406,7 @@ def cmd_search(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
     # Get classification filters
     importance = getattr(args, "importance", None)
     category = getattr(args, "category", None)
+    tag_filter = getattr(args, "tag", None)
 
     if args.query:
         if getattr(args, "hybrid", False):
@@ -431,6 +434,13 @@ def cmd_search(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
                 continue
             if category and r.get("category") != category:
                 continue
+            # Filter by tag (labels are stored as JSON list)
+            if tag_filter:
+                labels = r.get("labels", [])
+                if not isinstance(labels, list):
+                    labels = []
+                if tag_filter not in labels:
+                    continue
             filtered.append(r)
         results = filtered
     else:
@@ -447,6 +457,17 @@ def cmd_search(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
             limit=args.limit,
         )
 
+        # Apply tag filter after fetching
+        if tag_filter:
+            filtered = []
+            for r in results:
+                labels = r.get("labels", [])
+                if not isinstance(labels, list):
+                    labels = []
+                if tag_filter in labels:
+                    filtered.append(r)
+            results = filtered
+
     # Format output
     output = []
     for r in results:
@@ -461,6 +482,7 @@ def cmd_search(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
                 "is_read": r["is_read"],
                 "importance": r.get("importance", "normal"),
                 "category": r.get("category", "uncategorized"),
+                "tags": r.get("labels", []),
                 "snippet": r["body_text"][:100] + "..."
                 if r["body_text"] and len(r["body_text"]) > 100
                 else r["body_text"],
@@ -610,25 +632,50 @@ def cmd_read(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
             json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, "Email not found locally"))
         )
         return
-    table_md = _render_table(
-        "email_table.md.j2",
-        {
-            "rows": [
-                {
-                    "sender": email.get("sender", ""),
-                    "recipient": email.get("recipient", ""),
-                    "cc": email.get("cc", ""),
-                    "date": email.get("date", ""),
-                    "subject": email.get("subject", ""),
-                    "snippet": (email.get("body_text", "") or "")[:200]
-                    .replace("\n", " ")
-                    .replace("\r", ""),
-                    "attachments": [att.get("local_path") for att in email.get("attachments", [])],
-                }
-            ]
-        },
-    )
-    print(table_md)
+
+    # Use enhanced detail view by default, brief view with --brief flag
+    if getattr(args, "brief", False):
+        # Legacy table view
+        table_md = _render_table(
+            "email_table.md.j2",
+            {
+                "rows": [
+                    {
+                        "sender": email.get("sender", ""),
+                        "recipient": email.get("recipient", ""),
+                        "cc": email.get("cc", ""),
+                        "date": email.get("date", ""),
+                        "subject": email.get("subject", ""),
+                        "snippet": (email.get("body_text", "") or "")[:200]
+                        .replace("\n", " ")
+                        .replace("\r", ""),
+                        "attachments": [att.get("local_path") for att in email.get("attachments", [])],
+                    }
+                ]
+            },
+        )
+        print(table_md)
+    else:
+        # Enhanced detail view with Markdown formatting
+        # Get thread context if available
+        thread_timeline = isolated_db.get_thread_timeline(args.message_id)
+
+        # Get attachment server port for preview URLs
+        port = None
+        if email.get("attachments"):
+            # Try to get or start attachment server
+            server = AttachmentServer(paths["attachments_path"])
+            try:
+                port = server.get_port()
+            except Exception:
+                port = None
+
+        detail_md = format_email_detail(
+            email=email,
+            port=port,
+            thread_timeline=thread_timeline,
+        )
+        print(detail_md)
 
 
 def _append_signature(
@@ -701,6 +748,53 @@ def _markdown_to_html(md_text: str) -> str:
     except Exception as e:
         logger.warning(f"Could not load HTML template, using raw HTML: {e}")
         return html_content
+
+
+def cmd_templates(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Manage email templates."""
+    client = get_client(config, getattr(args, "account", None))
+    paths = _get_account_paths(config, client.email)
+    templates_dir = os.path.join(paths["root"], "templates")
+
+    manager = TemplateManager(templates_dir)
+
+    if args.template_command == "list":
+        templates = manager.list_templates()
+        print(json.dumps(success_response(data={"templates": templates})))
+    elif args.template_command == "show":
+        try:
+            template = manager.get_template(args.name)
+            print(
+                json.dumps(
+                    success_response(
+                        data={
+                            "name": template.name,
+                            "content": template.content,
+                            "required_vars": template.required_vars,
+                            "optional_vars": template.optional_vars,
+                        }
+                    )
+                )
+            )
+        except FileNotFoundError:
+            print(json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, "Template not found")))
+    elif args.template_command == "create":
+        try:
+            content = args.content
+            required_vars = args.required_vars.split(",") if args.required_vars else None
+            template = manager.create_template(args.name, content, required_vars)
+            print(
+                json.dumps(
+                    success_response(
+                        data={
+                            "name": template.name,
+                            "required_vars": template.required_vars,
+                        }
+                    )
+                )
+            )
+        except Exception as e:
+            print(json.dumps(error_response(ErrorCodes.INTERNAL_ERROR, str(e))))
 
 
 def cmd_send(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
@@ -1708,6 +1802,7 @@ def main():
         choices=["work", "personal", "notification", "promo", "uncategorized"],
         help="Filter by category",
     )
+    search_p.add_argument("--tag", help="Filter by tag (label)")
     search_p.add_argument("--limit", type=int, default=20, help="Max results")
 
     # smart-search
@@ -1722,6 +1817,21 @@ def main():
     read_p = subparsers.add_parser("read", help="Read a specific email by message_id")
     read_p.add_argument("message_id", help="Message ID to read")
     read_p.add_argument("--account", help="Account to read from")
+    read_p.add_argument("--brief", action="store_true", help="Show brief table view instead of detailed Markdown")
+
+    # templates
+    templates_p = subparsers.add_parser("templates", help="Manage email templates")
+    template_subparsers = templates_p.add_subparsers(dest="template_command", required=True)
+    template_list = template_subparsers.add_parser("list", help="List available templates")
+    template_list.add_argument("--account", help="Account to use")
+    template_show = template_subparsers.add_parser("show", help="Show template content")
+    template_show.add_argument("name", help="Template name")
+    template_show.add_argument("--account", help="Account to use")
+    template_create = template_subparsers.add_parser("create", help="Create a new template")
+    template_create.add_argument("name", help="Template name")
+    template_create.add_argument("--content", required=True, help="Template content")
+    template_create.add_argument("--required-vars", help="Comma-separated required variables")
+    template_create.add_argument("--account", help="Account to use")
 
     # send
     send_p = subparsers.add_parser("send", help="Send an email")
@@ -1750,10 +1860,12 @@ def main():
     )
 
     # mark
-    mark_p = subparsers.add_parser("mark", help="Mark email as read/starred")
+    mark_p = subparsers.add_parser("mark", help="Mark email as read/starred and manage tags")
     mark_p.add_argument("message_id", help="Message ID to mark")
     mark_p.add_argument("--read", type=int, choices=[0, 1], help="1 to mark read, 0 for unread")
     mark_p.add_argument("--starred", type=int, choices=[0, 1], help="1 to star, 0 to unstar")
+    mark_p.add_argument("--add-tag", help="Add a tag to the email")
+    mark_p.add_argument("--remove-tag", help="Remove a tag from the email")
 
     # move
     move_p = subparsers.add_parser("move", help="Move email to folder")
@@ -1891,6 +2003,8 @@ def main():
         cmd_batch_mark(args, config, db)
     elif args.command == "tag":
         cmd_tag(args, config, db)
+    elif args.command == "templates":
+        cmd_templates(args, config, db)
 
 
 if __name__ == "__main__":
