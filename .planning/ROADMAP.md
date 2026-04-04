@@ -95,7 +95,15 @@ Plans:
   3. User can see attachments with preview links in email detail view
   4. User can batch mark multiple emails as read/unread or starred
   5. User can add custom tags to emails
-**Plans**: TBD
+**Plans**: 6 plans in 3 waves
+
+Plans:
+- [ ] 05-00-PLAN.md — Test stubs for templates, detail, and batch mark modules (Wave 0)
+- [ ] 05-01-PLAN.md — YAML templates with variable placeholders and validation (TMPL-01, TMPL-02, TMPL-05)
+- [ ] 05-02-PLAN.md — Enhanced email detail formatting with Markdown, headers, classification, attachments (DET-01~05)
+- [ ] 05-03-PLAN.md — Batch operations and custom tags in database layer (MARK-01, MARK-02, MARK-04)
+- [ ] 05-04-PLAN.md — CLI integration for templates and enhanced detail view (TMPL-03, TMPL-04)
+- [ ] 05-05-PLAN.md — CLI integration for batch mark and tag commands (MARK-01, MARK-02, MARK-03)
 
 ## Progress
 
@@ -105,7 +113,7 @@ Plans:
 | 2. Attachment Preview Service | 2/2 | Complete | 02-01-PLAN, 02-02-PLAN |
 | 3. Natural Language Search | 3/4 | In Progress|  |
 | 4. Smart Classification | 2/4 | In Progress | 04-00-PLAN, 04-01-PLAN |
-| 5. User Experience Enhancement | 0/TBD | Not started | - |
+| 5. User Experience Enhancement | 0/6 | Not started | - |
 | 6. Smart Enhancements | 0/TBD | Not started | - |
 
 ### Phase 6: Smart Enhancements (邮件关联、附件解读、大模型润色)
@@ -126,4 +134,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-04-04*
-*Last updated: 2026-04-04 - Phase 4 Plan 01 complete*
+*Last updated: 2026-04-04 - Phase 5 plans created*
