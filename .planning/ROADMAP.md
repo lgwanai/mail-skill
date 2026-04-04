@@ -59,7 +59,12 @@ Plans:
   3. Original `search` command behavior remains unchanged (backward compatibility)
   4. Natural language search completes within 2 seconds
   5. User can see which query components were extracted (date, sender, keywords)
-**Plans**: TBD
+**Plans**: 3 plans in 3 waves
+
+Plans:
+- [ ] 03-01-PLAN.md — Date parser module for Chinese date expressions (date_parser.py, test_date_parser.py)
+- [ ] 03-02-PLAN.md — Query parser with sender matching and keyword extraction (query_parser.py, test_query_parser.py)
+- [ ] 03-03-PLAN.md — CLI integration for smart-search command (mail_cli.py, test_cli.py)
 
 ### Phase 4: Smart Classification
 **Goal**: Emails are automatically categorized by importance and type
@@ -91,7 +96,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Code Quality Foundation | 6/6 | Complete | 01-PLAN, 02-PLAN, 03-PLAN, 04-PLAN, 05-PLAN, 06-PLAN |
 | 2. Attachment Preview Service | 0/2 | Planning | - |
-| 3. Natural Language Search | 0/TBD | Not started | - |
+| 3. Natural Language Search | 0/3 | Planning | - |
 | 4. Smart Classification | 0/TBD | Not started | - |
 | 5. User Experience Enhancement | 0/TBD | Not started | - |
 | 6. Smart Enhancements | 0/TBD | Not started | - |
@@ -114,4 +119,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-04-04*
-*Last updated: 2026-04-04 - Phase 2 plans created*
+*Last updated: 2026-04-04 - Phase 3 plans created*
