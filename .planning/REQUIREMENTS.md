@@ -17,8 +17,8 @@
 - [ ] **SRCH-01**: 支持自然语言日期解析，如"上周"、"昨天"、"最近3天"、"上个月"
 - [x] **SRCH-02**: 支持发件人名称模糊匹配，如"王总"匹配"王某某 <wang@company.com>"
 - [x] **SRCH-03**: 支持关键词自动提取，组合 FTS + 向量搜索
-- [ ] **SRCH-04**: 保持向后兼容，原 search 命令行为不变，新增 smart-search 命令
-- [ ] **SRCH-05**: 搜索响应时间 < 2秒
+- [x] **SRCH-04**: 保持向后兼容，原 search 命令行为不变，新增 smart-search 命令
+- [x] **SRCH-05**: 搜索响应时间 < 2秒
 
 ### Smart Classification (智能分类)
 
@@ -100,8 +100,8 @@
 | SRCH-01 | Phase 3 | Pending |
 | SRCH-02 | Phase 3 | Complete |
 | SRCH-03 | Phase 3 | Complete |
-| SRCH-04 | Phase 3 | Pending |
-| SRCH-05 | Phase 3 | Pending |
+| SRCH-04 | Phase 3 | Complete |
+| SRCH-05 | Phase 3 | Complete |
 | CLAS-01 | Phase 4 | Pending |
 | CLAS-02 | Phase 4 | Pending |
 | CLAS-03 | Phase 4 | Pending |
