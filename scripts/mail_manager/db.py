@@ -114,6 +114,16 @@ class MailDatabase:
             if '"references"' not in columns and "references" not in columns:
                 cursor.execute('ALTER TABLE emails ADD COLUMN "references" TEXT')
 
+            # Classification columns migration
+            if "importance" not in columns:
+                cursor.execute("ALTER TABLE emails ADD COLUMN importance TEXT DEFAULT 'normal'")
+            if "category" not in columns:
+                cursor.execute("ALTER TABLE emails ADD COLUMN category TEXT DEFAULT 'uncategorized'")
+            if "classification_confidence" not in columns:
+                cursor.execute("ALTER TABLE emails ADD COLUMN classification_confidence REAL DEFAULT 0.0")
+            if "manual_override" not in columns:
+                cursor.execute("ALTER TABLE emails ADD COLUMN manual_override BOOLEAN DEFAULT 0")
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS attachments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,6 +144,11 @@ class MailDatabase:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_subject ON emails(subject)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_in_reply_to ON emails(in_reply_to)")
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_references ON emails("references")')
+
+            # Classification indexes
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_importance ON emails(importance)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_category ON emails(category)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_classification_confidence ON emails(classification_confidence)")
 
             # Create FTS5 virtual table for full-text search
             try:

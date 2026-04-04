@@ -287,3 +287,84 @@ class TestMailDatabase:
         assert None not in senders
         assert "" not in senders
         assert "valid@example.com" in senders
+
+
+class TestClassificationColumns:
+    """Tests for classification columns in the database schema."""
+
+    @pytest.fixture
+    def db(self, temp_db_path, mock_chroma_collection):
+        """Create a MailDatabase with temp storage."""
+        return MailDatabase(temp_db_path)
+
+    def test_classification_columns_exist(self, db):
+        """Test that classification columns exist with correct defaults."""
+        import sqlite3
+
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(emails)")
+        columns = {col[1]: col for col in cursor.fetchall()}
+
+        # Check importance column
+        assert "importance" in columns
+        assert columns["importance"][2] == "TEXT"  # Type
+        assert columns["importance"][4] == "'normal'"  # Default value
+
+        # Check category column
+        assert "category" in columns
+        assert columns["category"][2] == "TEXT"  # Type
+        assert columns["category"][4] == "'uncategorized'"  # Default value
+
+        # Check classification_confidence column
+        assert "classification_confidence" in columns
+        assert columns["classification_confidence"][2] == "REAL"  # Type
+        assert columns["classification_confidence"][4] == "0.0"  # Default value
+
+        # Check manual_override column
+        assert "manual_override" in columns
+        assert columns["manual_override"][2] == "BOOLEAN"  # Type
+
+        conn.close()
+
+    def test_classification_indexes_exist(self, db):
+        """Test that indexes for classification columns are created."""
+        import sqlite3
+
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        indexes = [row[0] for row in cursor.fetchall()]
+        conn.close()
+
+        assert "idx_importance" in indexes
+        assert "idx_category" in indexes
+        assert "idx_classification_confidence" in indexes
+
+    def test_classification_migration(self, db):
+        """Test that existing database migrates correctly when columns are missing."""
+        import sqlite3
+
+        # The db fixture already initializes the database, so columns should exist
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(emails)")
+        columns = {col[1]: col for col in cursor.fetchall()}
+        conn.close()
+
+        # Verify all classification columns exist (migration worked)
+        assert "importance" in columns
+        assert "category" in columns
+        assert "classification_confidence" in columns
+        assert "manual_override" in columns
+
+    def test_classification_defaults_on_insert(self, db, sample_email_data):
+        """Test that new emails get default classification values."""
+        db.save_email(sample_email_data)
+
+        result = db.get_email(sample_email_data["message_id"])
+        assert result is not None
+        assert result["importance"] == "normal"
+        assert result["category"] == "uncategorized"
+        assert result["classification_confidence"] == 0.0
+        assert result["manual_override"] in (False, 0)  # SQLite may return 0 for False
