@@ -1,24 +1,34 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import argparse
-import os
-import sys
 import json
 import logging
+import os
+import re
+import sys
+import tempfile
 import threading
 import time
 import uuid
-import re
 import zipfile
-import tempfile
-import markdown
 from datetime import datetime
+from typing import TYPE_CHECKING, Any, Optional
+
+import markdown  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
 # Ensure the parent directory is in sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mail_manager.db import MailDatabase
+
 from mail_manager.client import MailClient
+from mail_manager.db import MailDatabase
+from mail_manager.errors import ErrorCodes, error_response, success_response
+
+if TYPE_CHECKING:
+    from mail_manager.client import MailClient
+    from mail_manager.db import MailDatabase
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -28,28 +38,28 @@ logger = logging.getLogger(__name__)
 TASKS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'mail_data', 'tasks')
 os.makedirs(TASKS_DIR, exist_ok=True)
 
-def load_config():
-    """Load configuration from config.txt file"""
+def load_config() -> dict[str, Any]:
+    """Load configuration from config.txt file."""
     # Look for config.txt in the parent directory of scripts
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.txt')
     if os.path.exists(env_path):
         load_dotenv(env_path)
     else:
-        load_dotenv('config.txt') # Try current directory
-        
-    config = {
+        load_dotenv('config.txt')  # Try current directory
+
+    config: dict[str, Any] = {
         'STORAGE_ROOT': os.getenv('MAIL_STORAGE_ROOT', './mail_data'),
         'DB_PATH': os.getenv('MAIL_DB_PATH', './mail_data/mail_index.db'),
         'ATTACHMENT_PATH': os.getenv('MAIL_ATTACHMENT_PATH', './mail_data/attachments'),
         'ACCOUNTS': {}
     }
-    
+
     # Parse accounts
     for key, value in os.environ.items():
         if key.startswith('MAIL_ACCOUNT_') and key.endswith('_EMAIL'):
-            account_prefix = key[:-6] # Remove _EMAIL
+            account_prefix = key[:-6]  # Remove _EMAIL
             account_id = account_prefix.split('_')[-1]
-            
+
             config['ACCOUNTS'][value] = {
                 'EMAIL': value,
                 'PASSWORD': os.getenv(f'{account_prefix}_PASSWORD'),
@@ -60,29 +70,35 @@ def load_config():
                 'USE_SSL': os.getenv(f'{account_prefix}_USE_SSL', 'true'),
                 'PREFIX': account_prefix
             }
-            
+
     return config
 
-def get_client(config, email_account=None):
+
+def get_client(config: dict[str, Any], email_account: Optional[str] = None) -> MailClient:
+    """Get a MailClient instance for the specified account."""
     if not config['ACCOUNTS']:
         raise ValueError("No mail accounts configured in config.txt")
-        
+
     if email_account and email_account in config['ACCOUNTS']:
         account_config = config['ACCOUNTS'][email_account]
     else:
         # Use the first account
         account_config = list(config['ACCOUNTS'].values())[0]
-        
+
     return MailClient(account_config)
 
-def _process_attachments(attach_paths, zip_as=None):
+
+def _process_attachments(
+    attach_paths: Optional[list[str]],
+    zip_as: Optional[str] = None
+) -> Optional[list[str]]:
     """Process attachments: zip folders, or pack everything into one zip file."""
     if not attach_paths:
         return None
-        
-    final_attachments = []
+
+    final_attachments: list[str] = []
     temp_dir = tempfile.mkdtemp()
-    
+
     if zip_as:
         if not zip_as.endswith('.zip'):
             zip_as += '.zip'
@@ -122,19 +138,20 @@ def _process_attachments(attach_paths, zip_as=None):
                             rel_path = os.path.relpath(file_path, parent_dir)
                             zipf.write(file_path, arcname=rel_path)
                 final_attachments.append(zip_path)
-                
+
     return final_attachments
 
-def _get_account_paths(config, email_address):
-    """Generate isolated storage paths for a specific email account"""
+
+def _get_account_paths(config: dict[str, Any], email_address: str) -> dict[str, str]:
+    """Generate isolated storage paths for a specific email account."""
     # Sanitize email address for directory name.
     # Replace special characters with underscore to match user's expected wuliang_at_chinamobile_com
     safe_email = email_address.replace('@', '_at_').replace('.', '_')
     # Remove any other characters that might be problematic, but keep alphanumeric, -, _, and @.
     safe_email = "".join([c for c in safe_email if c.isalpha() or c.isdigit() or c in '-_']).rstrip()
-    
+
     account_root = os.path.join(config['STORAGE_ROOT'], safe_email)
-    
+
     return {
         'root': account_root,
         'db_path': os.path.join(account_root, 'mail_index.db'),
@@ -144,17 +161,37 @@ def _get_account_paths(config, email_address):
         'signature_path': os.path.join(account_root, 'signature.md')
     }
 
-def _get_template_env():
+
+def _get_template_env() -> Environment:
+    """Get Jinja2 template environment."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     tpl_dir = os.path.join(root, 'references', 'templates')
     return Environment(loader=FileSystemLoader(tpl_dir), autoescape=False)
 
-def _render_table(template_name, context):
+
+def _render_table(template_name: str, context: dict[str, Any]) -> str:
+    """Render a table template with the given context."""
     env = _get_template_env()
     tpl = env.get_template(template_name)
     return tpl.render(**context)
 
-def _run_fetch_task(task_id, config, db_path, args):
+
+def _run_fetch_task(
+    task_id: str,
+    config: dict[str, Any],
+    db_path: str,
+    args: Any
+) -> None:
+    """Run fetch task in background thread."""
+    # Ensure this runs in a completely separate process to avoid thread killing issues
+    task_file = os.path.join(TASKS_DIR, f"{task_id}.json")
+
+    def update_status(status: str, message: str = "", data: Optional[dict] = None) -> None:
+        info: dict[str, Any] = {"status": status, "message": message, "updated_at": datetime.now().isoformat()}
+        if data:
+            info.update(data)
+        with open(task_file, 'w') as f:
+            json.dump(info, f)
     # Ensure this runs in a completely separate process to avoid thread killing issues
     task_file = os.path.join(TASKS_DIR, f"{task_id}.json")
     def update_status(status, message="", data=None):
@@ -246,7 +283,9 @@ def _run_fetch_task(task_id, config, db_path, args):
         logger.error(f"Task {task_id} failed: {e}")
         update_status("failed", str(e))
 
-def cmd_fetch(args, config, db):
+
+def cmd_fetch(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Fetch emails from server to local database."""
     if args.limit > 100 and not args.confirm:
         print(json.dumps({
             "status": "requires_confirmation",
@@ -256,16 +295,16 @@ def cmd_fetch(args, config, db):
 
     task_id = str(uuid.uuid4())
     task_file = os.path.join(TASKS_DIR, f"{task_id}.json")
-    
+
     # Initialize task file
     with open(task_file, 'w') as f:
         json.dump({"status": "starting", "message": "Initializing fetch task...", "updated_at": datetime.now().isoformat()}, f)
-    
+
     # Use multiprocessing to ensure it runs even if parent exits
     import multiprocessing
     p = multiprocessing.Process(target=_run_fetch_task, args=(task_id, config, config['DB_PATH'], args))
     p.start()
-    
+
     # Return immediately to the LLM
     print(json.dumps({
         "status": "started",
@@ -273,10 +312,11 @@ def cmd_fetch(args, config, db):
         "message": "Fetch task started in the background. Use the 'fetch-status' command to check progress."
     }))
 
-def cmd_fetch_status(args, config, db):
+def cmd_fetch_status(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Check status of a background fetch task."""
     task_file = os.path.join(TASKS_DIR, f"{args.task_id}.json")
     if not os.path.exists(task_file):
-        print(json.dumps({"status": "error", "message": "Task not found"}))
+        print(json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, "Task not found")))
         return
         
     with open(task_file, 'r') as f:
@@ -284,12 +324,14 @@ def cmd_fetch_status(args, config, db):
         
     print(json.dumps(data, indent=2))
 
-def cmd_search(args, config, db):
+
+def cmd_search(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Search emails using FTS, vector, or hybrid search."""
     # Determine the isolated db_path
     client = get_client(config, getattr(args, 'account', None))
     paths = _get_account_paths(config, client.email)
     isolated_db = MailDatabase(paths['db_path'])
-    
+
     if args.query:
         if getattr(args, 'hybrid', False):
             results = isolated_db.search_hybrid(args.query, limit=args.limit)
@@ -337,18 +379,21 @@ def cmd_search(args, config, db):
             'is_read': r['is_read'],
             'snippet': r['body_text'][:100] + '...' if r['body_text'] and len(r['body_text']) > 100 else r['body_text']
         })
-        
-    print(json.dumps({"status": "success", "count": len(results), "results": output}, ensure_ascii=False, indent=2))
 
-def cmd_read(args, config, db):
+    print(json.dumps(success_response(
+        data={"count": len(results), "results": output}
+    ), ensure_ascii=False, indent=2))
+
+def cmd_read(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Read an email by message_id."""
     # Determine the isolated db_path
     client = get_client(config, getattr(args, 'account', None))
     paths = _get_account_paths(config, client.email)
     isolated_db = MailDatabase(paths['db_path'])
-    
+
     email = isolated_db.get_email(args.message_id)
     if not email:
-        print(json.dumps({"status": "error", "message": "Email not found locally"}))
+        print(json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, "Email not found locally")))
         return
     table_md = _render_table('email_table.md.j2', {
         "rows": [{
@@ -363,12 +408,17 @@ def cmd_read(args, config, db):
     })
     print(table_md)
 
-def _append_signature(body_text, html_body, signature_path):
+
+def _append_signature(
+    body_text: str,
+    html_body: Optional[str],
+    signature_path: str
+) -> tuple[str, Optional[str]]:
     """Append signature to the email body if the signature file exists and is not empty."""
     # Also support a fallback to just using the email address as the folder name
     # In case the directory wasn't sanitized with _at_
     fallback_path = signature_path.replace('_at_', '@').replace('_com', '.com').replace('_net', '.net').replace('_cn', '.cn').replace('_org', '.org')
-    
+
     actual_path = signature_path
     if not os.path.exists(actual_path):
         # Try the raw email format if the sanitized one doesn't exist
@@ -377,20 +427,20 @@ def _append_signature(body_text, html_body, signature_path):
             actual_path = alt_path
         else:
             return body_text, html_body
-            
+
     try:
         with open(actual_path, 'r', encoding='utf-8') as f:
             signature = f.read().strip()
     except Exception as e:
         logger.warning(f"Failed to read signature file {actual_path}: {e}")
         return body_text, html_body
-        
+
     if not signature:
         return body_text, html_body
-        
+
     # Append to plain text
     new_body_text = f"{body_text}\n\n--\n{signature}"
-    
+
     # Append to HTML if it exists
     new_html_body = html_body
     if html_body:
@@ -402,11 +452,12 @@ def _append_signature(body_text, html_body, signature_path):
             new_html_body = re.sub(r'(</body>)', rf'<br><br><div class="email-signature" style="color: #888; font-size: 0.9em; border-top: 1px solid #eee; padding-top: 10px; margin-top: 20px;">{html_signature}</div>\1', html_body, flags=re.IGNORECASE)
         else:
             new_html_body = f"{html_body}<br><br><div class=\"email-signature\" style=\"color: #888; font-size: 0.9em; border-top: 1px solid #eee; padding-top: 10px; margin-top: 20px;\">{html_signature}</div>"
-            
+
     return new_body_text, new_html_body
 
-def _markdown_to_html(md_text):
-    """Convert markdown text to styled HTML for emails"""
+
+def _markdown_to_html(md_text: str) -> str:
+    """Convert markdown text to styled HTML for emails."""
     html_content = markdown.markdown(md_text, extensions=['tables', 'fenced_code', 'nl2br'])
     # Render with our template
     try:
@@ -415,25 +466,26 @@ def _markdown_to_html(md_text):
         logger.warning(f"Could not load HTML template, using raw HTML: {e}")
         return html_content
 
-def cmd_send(args, config, db):
+def cmd_send(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Send a new email."""
     client = get_client(config, getattr(args, 'account', None))
     paths = _get_account_paths(config, client.email)
-    
+
     try:
         # Replace literal "\n" strings with actual newline characters
         # This handles cases where AI passes "Line 1\nLine 2" as a single string argument
         body_text = args.body.replace('\\n', '\n')
         html_body = getattr(args, 'html_body', None)
-        
+
         # ALWAYS auto-convert markdown body to HTML if not provided, or override if provided
         # Since we want to FORCE markdown to HTML, we will ignore args.html_body and always generate it
         html_body = _markdown_to_html(body_text)
-            
+
         # Append signature
         body_text, html_body = _append_signature(body_text, html_body, paths['signature_path'])
-        
+
         attachments = _process_attachments(args.attach, getattr(args, 'zip_as', None))
-        
+
         client.send_email(
             to=args.to,
             subject=args.subject,
@@ -443,19 +495,21 @@ def cmd_send(args, config, db):
             bcc=args.bcc,
             attachments=attachments
         )
-        print(json.dumps({"status": "success", "message": "Email sent"}))
+        print(json.dumps(success_response(message="Email sent")))
     except Exception as e:
-        print(json.dumps({"status": "error", "message": str(e)}))
+        print(json.dumps(error_response(ErrorCodes.SERVER_SMTP_SEND_FAILED, str(e))))
 
-def cmd_reply(args, config, db):
+
+def cmd_reply(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Reply to an existing email."""
     import email.utils
     client = get_client(config, getattr(args, 'account', None))
     paths = _get_account_paths(config, client.email)
     isolated_db = MailDatabase(paths['db_path'])
-    
+
     orig_email = isolated_db.get_email(args.message_id)
     if not orig_email:
-        print(json.dumps({"status": "error", "message": "Email not found locally"}))
+        print(json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, "Email not found locally")))
         return
         
     my_email = client.email.lower()
@@ -556,99 +610,114 @@ def cmd_reply(args, config, db):
             in_reply_to=orig_msg_id,
             references=orig_msg_id
         )
-        print(json.dumps({
-            "status": "success", 
-            "message": "Reply sent",
-            "to": reply_to_addrs,
-            "cc": reply_cc_addrs
-        }))
+        print(json.dumps(success_response(
+            data={"to": reply_to_addrs, "cc": reply_cc_addrs},
+            message="Reply sent"
+        )))
     except Exception as e:
-        print(json.dumps({"status": "error", "message": str(e)}))
+        print(json.dumps(error_response(ErrorCodes.SERVER_SMTP_SEND_FAILED, str(e))))
 
-def cmd_mark(args, config, db):
+
+def cmd_mark(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Mark email as read/unread or starred."""
     # Determine the isolated db_path
     client_init = get_client(config, getattr(args, 'account', None))
     paths = _get_account_paths(config, client_init.email)
     isolated_db = MailDatabase(paths['db_path'])
-    
+
     email = isolated_db.get_email(args.message_id)
     if not email:
-        print(json.dumps({"status": "error", "message": "Email not found locally"}))
+        print(json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, "Email not found locally")))
         return
-        
+
     client = get_client(config, email['account'])
-    
+
     try:
         imap_uid = email.get('imap_uid')
         if not imap_uid:
-            print(json.dumps({"status": "error", "message": "Cannot mark email on server: missing imap_uid in database. Please fetch emails again."}))
+            print(json.dumps(error_response(
+                ErrorCodes.USER_INVALID_MESSAGE_ID,
+                "Cannot mark email on server: missing imap_uid in database. Please fetch emails again."
+            )))
             return
 
         if args.read is not None:
             is_read = bool(args.read)
             client.mark_as_read(imap_uid, email['folder'], is_read)
             isolated_db.update_flags(args.message_id, is_read=is_read)
-            
+
         if args.starred is not None:
             is_starred = bool(args.starred)
             client.mark_as_starred(imap_uid, email['folder'], is_starred)
             isolated_db.update_flags(args.message_id, is_starred=is_starred)
-            
-        print(json.dumps({"status": "success", "message": "Flags updated"}))
-    except Exception as e:
-        print(json.dumps({"status": "error", "message": str(e)}))
 
-def cmd_move(args, config, db):
+        print(json.dumps(success_response(message="Flags updated")))
+    except Exception as e:
+        print(json.dumps(error_response(ErrorCodes.SERVER_IMAP_CONNECTION_FAILED, str(e))))
+
+
+def cmd_move(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Move email to another folder."""
     # Determine the isolated db_path
     client_init = get_client(config, getattr(args, 'account', None))
     paths = _get_account_paths(config, client_init.email)
     isolated_db = MailDatabase(paths['db_path'])
-    
+
     email = isolated_db.get_email(args.message_id)
     if not email:
-        print(json.dumps({"status": "error", "message": "Email not found locally"}))
+        print(json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, "Email not found locally")))
         return
-        
+
     client = get_client(config, email['account'])
-    
+
     try:
         imap_uid = email.get('imap_uid')
         if not imap_uid:
-            print(json.dumps({"status": "error", "message": "Cannot move email on server: missing imap_uid in database. Please fetch emails again."}))
+            print(json.dumps(error_response(
+                ErrorCodes.USER_INVALID_MESSAGE_ID,
+                "Cannot move email on server: missing imap_uid in database. Please fetch emails again."
+            )))
             return
 
         client.move_emails(imap_uid, args.target_folder, email['folder'])
         isolated_db.update_flags(args.message_id, folder=args.target_folder)
-        print(json.dumps({"status": "success", "message": f"Moved to {args.target_folder}"}))
+        print(json.dumps(success_response(message=f"Moved to {args.target_folder}")))
     except Exception as e:
-        print(json.dumps({"status": "error", "message": str(e)}))
+        print(json.dumps(error_response(ErrorCodes.SERVER_IMAP_CONNECTION_FAILED, str(e))))
 
-def cmd_delete(args, config, db):
+
+def cmd_delete(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Delete an email."""
     # Determine the isolated db_path
     client_init = get_client(config, getattr(args, 'account', None))
     paths = _get_account_paths(config, client_init.email)
     isolated_db = MailDatabase(paths['db_path'])
-    
+
     email = isolated_db.get_email(args.message_id)
     if not email:
-        print(json.dumps({"status": "error", "message": "Email not found locally"}))
+        print(json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, "Email not found locally")))
         return
-        
+
     client = get_client(config, email['account'])
-    
+
     try:
         imap_uid = email.get('imap_uid')
         if not imap_uid:
-            print(json.dumps({"status": "error", "message": "Cannot delete email on server: missing imap_uid in database. Please fetch emails again."}))
+            print(json.dumps(error_response(
+                ErrorCodes.USER_INVALID_MESSAGE_ID,
+                "Cannot delete email on server: missing imap_uid in database. Please fetch emails again."
+            )))
             return
 
         client.delete_emails(imap_uid, email['folder'])
         isolated_db.delete_email(args.message_id)
-        print(json.dumps({"status": "success", "message": "Email deleted"}))
+        print(json.dumps(success_response(message="Email deleted")))
     except Exception as e:
-        print(json.dumps({"status": "error", "message": str(e)}))
+        print(json.dumps(error_response(ErrorCodes.SERVER_IMAP_CONNECTION_FAILED, str(e))))
 
-def cmd_export(args, config, db):
+
+def cmd_export(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Export emails to JSON or CSV file."""
     # Determine the isolated db_path
     client = get_client(config, getattr(args, 'account', None))
     paths = _get_account_paths(config, client.email)
@@ -676,9 +745,11 @@ def cmd_export(args, config, db):
                     'folder': r['folder'],
                     'is_read': r['is_read']
                 })
-    print(json.dumps({"status": "success", "message": f"Exported {len(results)} emails to {args.output}"}))
+    print(json.dumps(success_response(message=f"Exported {len(results)} emails to {args.output}")))
 
-def cmd_summarize(args, config, db):
+
+def cmd_summarize(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Summarize emails using LLM."""
     # Determine the isolated db_path
     client = get_client(config, getattr(args, 'account', None))
     paths = _get_account_paths(config, client.email)
@@ -789,7 +860,9 @@ def cmd_summarize(args, config, db):
     
     print("\n".join(report))
 
-def cmd_thread(args, config, db):
+
+def cmd_thread(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Display email thread timeline."""
     client = get_client(config, getattr(args, 'account', None))
     paths = _get_account_paths(config, client.email)
     isolated_db = MailDatabase(paths['db_path'])
@@ -811,7 +884,9 @@ def cmd_thread(args, config, db):
     table_md = _render_table('thread.md.j2', {"rows": rows})
     print(table_md)
 
-def cmd_rebuild_index(args, config, db):
+
+def cmd_rebuild_index(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Rebuild ChromaDB index for vector search."""
     client = get_client(config, getattr(args, 'account', None))
     paths = _get_account_paths(config, client.email)
     isolated_db = MailDatabase(paths['db_path'])
