@@ -59,9 +59,10 @@ Plans:
   3. Original `search` command behavior remains unchanged (backward compatibility)
   4. Natural language search completes within 2 seconds
   5. User can see which query components were extracted (date, sender, keywords)
-**Plans**: 3 plans in 3 waves
+**Plans**: 4 plans in 4 waves
 
 Plans:
+- [x] 03-00-PLAN.md — Test stubs and empty modules for TDD foundation (Wave 0)
 - [x] 03-01-PLAN.md — Date parser module for Chinese date expressions (date_parser.py, test_date_parser.py)
 - [ ] 03-02-PLAN.md — Query parser with sender matching and keyword extraction (query_parser.py, test_query_parser.py)
 - [ ] 03-03-PLAN.md — CLI integration for smart-search command (mail_cli.py, test_cli.py)
@@ -96,7 +97,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Code Quality Foundation | 6/6 | Complete | 01-PLAN, 02-PLAN, 03-PLAN, 04-PLAN, 05-PLAN, 06-PLAN |
 | 2. Attachment Preview Service | 2/2 | Complete | 02-01-PLAN, 02-02-PLAN |
-| 3. Natural Language Search | 1/3 | In Progress | 03-01-PLAN |
+| 3. Natural Language Search | 2/4 | In Progress | 03-00-PLAN, 03-01-PLAN |
 | 4. Smart Classification | 0/TBD | Not started | - |
 | 5. User Experience Enhancement | 0/TBD | Not started | - |
 | 6. Smart Enhancements | 0/TBD | Not started | - |

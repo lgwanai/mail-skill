@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 03-natural-language-search/01-PLAN.md
-last_updated: "2026-04-04T11:30:00.000Z"
-last_activity: 2026-04-04 - Completed Phase 3 Plan 01: Chinese Date Expression Parser
+stopped_at: Completed 03-natural-language-search/00-PLAN.md
+last_updated: "2026-04-04T11:35:00.000Z"
+last_activity: 2026-04-04 - Completed Phase 3 Plan 00: Test Stubs and Empty Modules
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 14
-  completed_plans: 7
-  percent: 50
+  completed_phases: 2
+  total_plans: 18
+  completed_plans: 8
+  percent: 44
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** Let email management transform from "manual operations" to "intent-driven"
-**Current focus:** Phase 3: Natural Language Search - Plan 01 Complete
+**Current focus:** Phase 3: Natural Language Search - Wave 0 Complete
 
 ## Current Position
 
 Phase: 3 of 6 (Natural Language Search) - In Progress
-Plan: 1 of 3 in current phase
+Plan: 0 of 4 in current phase
 Status: In Progress
-Last activity: 2026-04-04 - Completed Phase 3 Plan 01: Chinese Date Expression Parser
+Last activity: 2026-04-04 - Completed Phase 3 Plan 00: Test Stubs and Empty Modules
 
-Progress: [=====-----] 50%
+Progress: [====------] 44%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 5 min
+- Total plans completed: 8
+- Average duration: 4 min
 - Total execution time: 35 min
 
 **By Phase:**
@@ -44,11 +44,13 @@ Progress: [=====-----] 50%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-code-quality-foundation | 6 | 30 min | 5 min |
-| 03-natural-language-search | 1 | 5 min | 5 min |
+| 02-attachment-preview-service | 2 | 10 min | 5 min |
+| 03-natural-language-search | 2 | 10 min | 5 min |
 
 **Recent Trend:**
-- Phase 3 Plan 01 completed successfully
-- Date parser module ready for query parser integration
+- Phase 3 Wave 0 (test stubs) completed successfully
+- Phase 3 Plan 01 (date parser) completed successfully
+- Query parser module ready for Wave 2 implementation
 
 *Updated after each plan completion*
 
@@ -66,33 +68,34 @@ Recent decisions affecting current work:
 - Plan 05: Use modern Python type syntax (`X | None` instead of `Optional[X]`)
 - Plan 06: 60% coverage baseline established, target 80%+ by end of project
 - Phase 3 Plan 01: Regex-based parsing for Chinese date expressions (no LLM needed for deterministic results)
+- Phase 3 Plan 00: Use NotImplementedError for function stubs to enable TDD workflow
 
 ### Pending Todos
 
-None - Phase 3 Plan 01 complete.
+None - Phase 3 Plan 00 complete.
 
 ### Blockers/Concerns
 
-None - Phase 3 Plan 01 complete.
+None - Phase 3 Plan 00 complete.
 
 ### Roadmap Evolution
 
 - Phase 6 added: Smart Enhancements (邮件关联、附件解读、大模型润色)
 
-## Phase 3 Plan 01 Success Criteria
+## Phase 3 Plan 00 Success Criteria
 
 All success criteria met:
 
-1. User can search with '昨天' and get emails from yesterday - parse_date_expression handles this
-2. User can search with '上周' and get emails from last week - parse_date_expression handles this
-3. User can search with '最近3天' and get emails from the last 3 days - parse_date_expression handles this
-4. Date parsing completes in under 50ms - regex-based parsing is fast
-5. 100% test coverage on date_parser.py - achieved
+1. date_parser.py exists with DateRange dataclass and function stubs
+2. query_parser.py exists with ParsedQuery dataclass and function stubs
+3. Both test files exist with passing placeholder tests
+4. pytest discovers and runs tests without errors
+5. All modules are importable
 
 ## Session Continuity
 
 Last session: 2026-04-04
-Stopped at: Completed 03-natural-language-search/01-PLAN.md
+Stopped at: Completed 03-natural-language-search/00-PLAN.md
 Resume file: None
 
 ## Next Plan
