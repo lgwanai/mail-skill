@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-smart-classification/01-PLAN.md
-last_updated: "2026-04-04T13:43:44.000Z"
-last_activity: "2026-04-04 - Completed Phase 4 Plan 01: Database Classification Columns"
+stopped_at: Completed 04-smart-classification/02-PLAN.md
+last_updated: "2026-04-04T13:50:44.000Z"
+last_activity: "2026-04-04 - Completed Phase 4 Plan 02: EmailClassifier Implementation"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 16
-  completed_plans: 14
-  percent: 56
+  completed_plans: 15
+  percent: 59
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** Let email management transform from "manual operations" to "intent-driven"
-**Current focus:** Phase 4: Smart Classification - Plan 01 Complete
+**Current focus:** Phase 4: Smart Classification - Plan 02 Complete
 
 ## Current Position
 
 Phase: 4 of 6 (Smart Classification) - In Progress
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In Progress
-Last activity: 2026-04-04 - Completed Phase 4 Plan 01: Database Classification Columns
+Last activity: 2026-04-04 - Completed Phase 4 Plan 02: EmailClassifier Implementation
 
-Progress: [======----] 56%
+Progress: [======----] 59%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
+- Total plans completed: 15
 - Average duration: 4 min
-- Total execution time: 57 min
+- Total execution time: 62 min
 
 **By Phase:**
 
@@ -46,15 +46,16 @@ Progress: [======----] 56%
 | 01-code-quality-foundation | 6 | 30 min | 5 min |
 | 02-attachment-preview-service | 2 | 10 min | 5 min |
 | 03-natural-language-search | 3 | 16 min | 5 min |
-| 04-smart-classification | 2 | 11 min | 5.5 min |
+| 04-smart-classification | 3 | 16 min | 5.3 min |
 
 **Recent Trend:**
 - Phase 4 Plan 00 (TDD foundation) completed successfully
 - Phase 4 Plan 01 (database schema) completed successfully
-- Database ready for classification storage
+- Phase 4 Plan 02 (EmailClassifier) completed successfully
+- EmailClassifier ready for CLI integration
 
 *Updated after each plan completion*
-| Phase 04-smart-classification P01 | 16 | 3 tasks | 4 files |
+| Phase 04-smart-classification P02 | 5 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -76,41 +77,44 @@ Recent decisions affecting current work:
 - [Phase 04-smart-classification]: Use from __future__ import annotations for Python 3.8 compatibility in classifier module
 - [Phase 04-smart-classification P01]: Classification columns use DEFAULT values for automatic assignment
 - [Phase 04-smart-classification P01]: Rule loading falls back to defaults on missing file, raises error on invalid YAML
+- [Phase 04-smart-classification P02]: Deferred load_rules import to __init__ to avoid circular import
+- [Phase 04-smart-classification P02]: Keyword matching limited to first 1000 chars of body for performance
+- [Phase 04-smart-classification P02]: Confidence calculated as ratio of matched weight to total possible weight
 
 ### Pending Todos
 
-None - Phase 4 Plan 01 complete.
+None - Phase 4 Plan 02 complete.
 
 ### Blockers/Concerns
 
-None - Phase 4 Plan 01 complete.
+None - Phase 4 Plan 02 complete.
 
 ### Roadmap Evolution
 
 - Phase 6 added: Smart Enhancements (邮件关联、附件解读、大模型润色)
 
-## Phase 4 Plan 01 Success Criteria
+## Phase 4 Plan 02 Success Criteria
 
 All success criteria met:
 
-1. Database has importance, category, classification_confidence, manual_override columns
-2. Indexes created for fast filtering by classification
-3. update_classification method updates classification fields
-4. get_email and search_emails return classification fields
-5. load_rules function loads rules from YAML configuration
+1. EmailClassifier class fully implemented with classify() method
+2. All rule types (sender, sender_pattern, keyword) work correctly
+3. Weighted voting produces correct importance/category
+4. Confidence score calculated correctly
+5. All tests pass with >90% coverage on classifier.py (actual: 99%)
 
 ## Session Continuity
 
-Last session: 2026-04-04T13:43:44.000Z
-Stopped at: Completed 04-smart-classification/01-PLAN.md
+Last session: 2026-04-04T13:50:44.000Z
+Stopped at: Completed 04-smart-classification/02-PLAN.md
 Resume file: None
 
 ## Next Plan
 
-Phase 4 Plan 2: Email Classifier Implementation
-- Goal: Implement EmailClassifier class with rule-based classification
-- Requirements: CLAS-03, CLAS-04
-- Plans: 04-02-PLAN.md (need to run /gsd:execute-phase for next plan)
+Phase 4 Plan 3: CLI Integration
+- Goal: Integrate EmailClassifier into CLI for email classification
+- Requirements: CLAS-04
+- Plans: 04-03-PLAN.md (need to run /gsd:execute-phase for next plan)
 
 ---
 *State initialized: 2026-04-04*

@@ -24,7 +24,7 @@
 
 - [x] **CLAS-01**: 数据库新增 importance 字段（critical/high/normal/low）
 - [x] **CLAS-02**: 数据库新增 category 字段（work/personal/notification/promo/uncategorized）
-- [ ] **CLAS-03**: 实现规则优先分类，基于发件人规则、关键词规则
+- [x] **CLAS-03**: 实现规则优先分类，基于发件人规则、关键词规则
 - [ ] **CLAS-04**: 分类结果持久化存储，支持按分类筛选
 - [ ] **CLAS-05**: 支持手动重新分类，分类置信度存储
 
@@ -104,7 +104,7 @@
 | SRCH-05 | Phase 3 | Complete |
 | CLAS-01 | Phase 4 | Complete |
 | CLAS-02 | Phase 4 | Complete |
-| CLAS-03 | Phase 4 | Pending |
+| CLAS-03 | Phase 4 | Complete |
 | CLAS-04 | Phase 4 | Pending |
 | CLAS-05 | Phase 4 | Pending |
 | TMPL-01 | Phase 5 | Pending |
