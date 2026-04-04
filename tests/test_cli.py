@@ -1025,3 +1025,200 @@ class TestCmdBatchMark:
         assert result["status"] == "error"
         assert result["code"] == ErrorCodes.USER_MISSING_PARAMETER
 
+
+class TestBatchMarkFromSearch:
+    """Tests for batch-mark --from-search functionality."""
+
+    @pytest.fixture
+    def mock_config(self, test_config: dict) -> dict:
+        """Create mock config with accounts."""
+        return {
+            "ACCOUNTS": {"test@example.com": test_config},
+            "STORAGE_ROOT": "/tmp/test",
+            "DB_PATH": "/tmp/test.db",
+            "ATTACHMENT_PATH": "/tmp/attachments",
+        }
+
+    def test_batch_mark_from_search_uses_search_results(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """batch-mark --from-search uses search results."""
+        from mail_cli import cmd_batch_mark
+
+        args = MagicMock()
+        args.message_ids = []
+        args.read = 1
+        args.starred = None
+        args.from_search = "sender:john"
+        args.account = None
+        args.limit = 100
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = [
+            {
+                "message_id": "msg1@example.com",
+                "imap_uid": "uid1",
+                "folder": "INBOX",
+                "account": "test@example.com",
+            },
+            {
+                "message_id": "msg2@example.com",
+                "imap_uid": "uid2",
+                "folder": "INBOX",
+                "account": "test@example.com",
+            },
+        ]
+        mock_db.batch_update_flags.return_value = 2
+        mock_db.get_email.side_effect = lambda mid: next(
+            (r for r in mock_db.search_emails.return_value if r["message_id"] == mid), None
+        )
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    cmd_batch_mark(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+
+        assert result["status"] == "success"
+        assert result["updated_count"] == 2
+        mock_db.search_emails.assert_called_once()
+
+    def test_batch_mark_from_search_executes_correct_query(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Search query is executed with correct filters."""
+        from mail_cli import cmd_batch_mark
+
+        args = MagicMock()
+        args.message_ids = []
+        args.read = 1
+        args.starred = None
+        args.from_search = "project alpha"
+        args.account = None
+        args.limit = 50
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = []
+        mock_db.batch_update_flags.return_value = 0
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    cmd_batch_mark(args, mock_config, MagicMock())
+
+        # Verify search was called with correct query and limit
+        mock_db.search_emails.assert_called_once_with(query="project alpha", limit=50)
+
+    def test_batch_mark_from_search_marks_all_matching(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """All matching emails are marked."""
+        from mail_cli import cmd_batch_mark
+
+        args = MagicMock()
+        args.message_ids = []
+        args.read = 1
+        args.starred = None
+        args.from_search = "test"
+        args.account = None
+        args.limit = 100
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = [
+            {
+                "message_id": f"msg{i}@example.com",
+                "imap_uid": f"uid{i}",
+                "folder": "INBOX",
+                "account": "test@example.com",
+            }
+            for i in range(5)
+        ]
+        mock_db.batch_update_flags.return_value = 5
+        mock_db.get_email.side_effect = lambda mid: next(
+            (r for r in mock_db.search_emails.return_value if r["message_id"] == mid), None
+        )
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    cmd_batch_mark(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+
+        assert result["status"] == "success"
+        assert result["updated_count"] == 5
+
+    def test_batch_mark_from_search_returns_count(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Returns count of marked emails."""
+        from mail_cli import cmd_batch_mark
+
+        args = MagicMock()
+        args.message_ids = []
+        args.read = 0
+        args.starred = None
+        args.from_search = "important"
+        args.account = None
+        args.limit = 100
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = [
+            {
+                "message_id": "msg1@example.com",
+                "imap_uid": "uid1",
+                "folder": "INBOX",
+                "account": "test@example.com",
+            }
+        ]
+        mock_db.batch_update_flags.return_value = 1
+        mock_db.get_email.side_effect = lambda mid: next(
+            (r for r in mock_db.search_emails.return_value if r["message_id"] == mid), None
+        )
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    cmd_batch_mark(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+
+        assert result["status"] == "success"
+        assert result["updated_count"] == 1
+
