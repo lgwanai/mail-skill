@@ -6,7 +6,7 @@ Transform Mail Skill from a basic email tool into an intelligent assistant. The 
 
 ## Phases
 
-- [ ] **Phase 1: Code Quality Foundation** - Test coverage, type annotations, unified error handling, lint standards
+- [x] **Phase 1: Code Quality Foundation** - Test coverage, type annotations, unified error handling, lint standards
 - [ ] **Phase 2: Attachment Preview Service** - Local HTTP server for secure attachment preview and download
 - [ ] **Phase 3: Natural Language Search** - Intent-driven search with date parsing and sender matching
 - [ ] **Phase 4: Smart Classification** - Rule-based email importance and category classification
@@ -30,8 +30,8 @@ Plans:
 - [x] 02-PLAN.md — Create test infrastructure with shared fixtures (conftest.py)
 - [x] 03-PLAN.md — Add type annotations and tests for MailClient (client.py, test_client.py)
 - [x] 04-PLAN.md — Add type annotations and tests for MailDatabase (db.py, test_db.py)
-- [ ] 05-PLAN.md — Migrate CLI to unified error handling and add CLI tests (mail_cli.py, test_cli.py, test_errors.py)
-- [ ] 06-PLAN.md — Apply ruff formatting/linting and verify coverage baseline
+- [x] 05-PLAN.md — Migrate CLI to unified error handling and add CLI tests (mail_cli.py, test_cli.py, test_errors.py)
+- [x] 06-PLAN.md — Apply ruff formatting/linting and verify coverage baseline
 
 ### Phase 2: Attachment Preview Service
 **Goal**: Users can preview and download email attachments via browser
@@ -43,7 +43,11 @@ Plans:
   3. Attachment server only accepts localhost connections (security verified)
   4. User cannot access files outside the attachments directory (path traversal blocked)
   5. Server port persists across commands without conflicts
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+
+Plans:
+- [ ] 02-01-PLAN.md — Core server module with security (server.py, test_server.py)
+- [ ] 02-02-PLAN.md — CLI integration for attachments command (mail_cli.py, test_cli.py)
 
 ### Phase 3: Natural Language Search
 **Goal**: Users can search emails using natural language queries instead of structured filters
@@ -85,12 +89,29 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Code Quality Foundation | 4/6 | In progress | 01-PLAN, 02-PLAN, 03-PLAN, 04-PLAN |
-| 2. Attachment Preview Service | 0/TBD | Not started | - |
+| 1. Code Quality Foundation | 6/6 | Complete | 01-PLAN, 02-PLAN, 03-PLAN, 04-PLAN, 05-PLAN, 06-PLAN |
+| 2. Attachment Preview Service | 0/2 | Planning | - |
 | 3. Natural Language Search | 0/TBD | Not started | - |
 | 4. Smart Classification | 0/TBD | Not started | - |
 | 5. User Experience Enhancement | 0/TBD | Not started | - |
+| 6. Smart Enhancements | 0/TBD | Not started | - |
+
+### Phase 6: Smart Enhancements (邮件关联、附件解读、大模型润色)
+
+**Goal**: Enhance email thread visualization, attachment content understanding, and AI-powered reply composition
+**Depends on**: Phase 5
+**Requirements**: THREAD-01, THREAD-02, THREAD-03, ATTACH-AI-01, ATTACH-AI-02, REPLY-AI-01, REPLY-AI-02, REPLY-AI-03
+
+Features:
+1. **邮件关联显示增强**: Fetch one email and auto-retrieve all related correspondence (sent/received) with timeline view - full display for current email, summary for others
+2. **附件智能解读**: Parse and summarize Excel, doc, PPT, PDF, txt, md, images for enhanced search indexing
+3. **大模型润色回复**: AI-polished email replies with user confirmation, learning from feedback history
+
+**Plans**: TBD
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 6 to break down)
 
 ---
 *Roadmap created: 2026-04-04*
-*Last updated: 2026-04-04 - Phase 1 plans 01-04 completed*
+*Last updated: 2026-04-04 - Phase 2 plans created*
