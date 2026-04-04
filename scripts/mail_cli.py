@@ -1262,6 +1262,240 @@ def cmd_thread(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
     print(table_md)
 
 
+def cmd_batch_mark(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Batch mark multiple emails as read/unread or starred."""
+    client = get_client(config, getattr(args, "account", None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths["db_path"])
+
+    # Validate at least one flag specified
+    if args.read is None and args.starred is None:
+        print(
+            json.dumps(
+                error_response(
+                    ErrorCodes.USER_MISSING_PARAMETER,
+                    "At least one flag (--read or --starred) must be specified",
+                )
+            )
+        )
+        return
+
+    # Get message IDs from args or search
+    message_ids: list[str] = []
+    if getattr(args, "from_search", None):
+        # Execute search and use results
+        results = isolated_db.search_emails(
+            query=args.from_search,
+            limit=getattr(args, "limit", 100),
+        )
+        message_ids = [r["message_id"] for r in results]
+    else:
+        message_ids = list(getattr(args, "message_ids", []))
+
+    if not message_ids:
+        print(
+            json.dumps(
+                error_response(
+                    ErrorCodes.USER_MISSING_PARAMETER,
+                    "No message IDs provided. Use message_ids or --from-search",
+                )
+            )
+        )
+        return
+
+    # Get emails and extract imap_uids, skip non-existent
+    valid_emails: list[dict[str, Any]] = []
+    for mid in message_ids:
+        email = isolated_db.get_email(mid)
+        if email:
+            valid_emails.append(email)
+
+    if not valid_emails:
+        print(
+            json.dumps(
+                error_response(
+                    ErrorCodes.USER_EMAIL_NOT_FOUND,
+                    "No valid emails found for the provided message IDs",
+                )
+            )
+        )
+        return
+
+    # Update database using batch_update_flags
+    valid_ids = [e["message_id"] for e in valid_emails]
+    updated_count = isolated_db.batch_update_flags(
+        message_ids=valid_ids,
+        is_read=bool(args.read) if args.read is not None else None,
+        is_starred=bool(args.starred) if args.starred is not None else None,
+    )
+
+    # Update IMAP server for each email (sequential, as IMAP doesn't support batch)
+    # Group by folder for efficiency
+    emails_by_folder: dict[str, list[dict[str, Any]]] = {}
+    for email in valid_emails:
+        folder = email.get("folder", "INBOX")
+        if folder not in emails_by_folder:
+            emails_by_folder[folder] = []
+        emails_by_folder[folder].append(email)
+
+    # Apply IMAP updates by folder
+    for folder, emails in emails_by_folder.items():
+        # Group by account (though typically all same account)
+        emails_by_account: dict[str, list[dict[str, Any]]] = {}
+        for email in emails:
+            account = email.get("account", "")
+            if account not in emails_by_account:
+                emails_by_account[account] = []
+            emails_by_account[account].append(email)
+
+        for account, account_emails in emails_by_account.items():
+            folder_client = get_client(config, account)
+            uids = [e.get("imap_uid") for e in account_emails if e.get("imap_uid")]
+            if not uids:
+                continue
+
+            if args.read is not None:
+                folder_client.mark_as_read(uids, folder, bool(args.read))
+            if args.starred is not None:
+                folder_client.mark_as_starred(uids, folder, bool(args.starred))
+
+    print(
+        json.dumps(
+            success_response(
+                data={"updated_count": updated_count},
+                message=f"Updated {updated_count} emails",
+            )
+        )
+    )
+
+
+def cmd_tag(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Manage email tags (labels)."""
+    client = get_client(config, getattr(args, "account", None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths["db_path"])
+
+    tag_command = getattr(args, "tag_command", None)
+
+    if tag_command == "add":
+        message_id = args.message_id
+        tag = args.tag
+        email = isolated_db.get_email(message_id)
+        if not email:
+            print(
+                json.dumps(
+                    error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, f"Email {message_id} not found")
+                )
+            )
+            return
+        isolated_db.add_tags(message_id, [tag])
+        updated_tags = isolated_db.get_tags(message_id)
+        print(
+            json.dumps(
+                success_response(
+                    data={"message_id": message_id, "tags": updated_tags},
+                    message=f"Added tag '{tag}'",
+                )
+            )
+        )
+
+    elif tag_command == "remove":
+        message_id = args.message_id
+        tag = args.tag
+        email = isolated_db.get_email(message_id)
+        if not email:
+            print(
+                json.dumps(
+                    error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, f"Email {message_id} not found")
+                )
+            )
+            return
+        isolated_db.remove_tags(message_id, [tag])
+        updated_tags = isolated_db.get_tags(message_id)
+        print(
+            json.dumps(
+                success_response(
+                    data={"message_id": message_id, "tags": updated_tags},
+                    message=f"Removed tag '{tag}'",
+                )
+            )
+        )
+
+    elif tag_command == "list":
+        message_id = args.message_id
+        email = isolated_db.get_email(message_id)
+        if not email:
+            print(
+                json.dumps(
+                    error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, f"Email {message_id} not found")
+                )
+            )
+            return
+        tags = isolated_db.get_tags(message_id)
+        print(
+            json.dumps(
+                success_response(
+                    data={"message_id": message_id, "tags": tags},
+                )
+            )
+        )
+
+    elif tag_command == "batch-add":
+        tag = args.tag
+        from_search = getattr(args, "from_search", None)
+        limit = getattr(args, "limit", 100)
+
+        if not from_search:
+            print(
+                json.dumps(
+                    error_response(
+                        ErrorCodes.USER_MISSING_PARAMETER,
+                        "--from-search is required for batch-add",
+                    )
+                )
+            )
+            return
+
+        # Execute search and use results
+        results = isolated_db.search_emails(query=from_search, limit=limit)
+        message_ids = [r["message_id"] for r in results]
+
+        if not message_ids:
+            print(
+                json.dumps(
+                    success_response(
+                        data={"updated_count": 0, "message_ids": []},
+                        message="No emails found matching search",
+                    )
+                )
+            )
+            return
+
+        updated_count = isolated_db.batch_add_tags(message_ids, [tag])
+        print(
+            json.dumps(
+                success_response(
+                    data={
+                        "updated_count": updated_count,
+                        "message_ids": message_ids,
+                        "tag": tag,
+                    },
+                    message=f"Added tag '{tag}' to {updated_count} emails",
+                )
+            )
+        )
+
+    else:
+        print(
+            json.dumps(
+                error_response(
+                    ErrorCodes.USER_INVALID_PARAMETER,
+                    f"Unknown tag command: {tag_command}",
+                )
+            )
+        )
+
+
 def cmd_classify(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
     """Classify emails automatically or get classification for one email."""
     from mail_manager.classifier import EmailClassifier
@@ -1576,6 +1810,40 @@ def main():
     reclassify_p.add_argument("--category", choices=["work", "personal", "notification", "promo", "uncategorized"], help="New category")
     reclassify_p.add_argument("--account", help="Account the email belongs to")
 
+    # batch-mark
+    batch_mark_p = subparsers.add_parser("batch-mark", help="Batch mark emails as read/starred")
+    batch_mark_p.add_argument("message_ids", nargs="*", help="Message IDs to mark")
+    batch_mark_p.add_argument("--read", type=int, choices=[0, 1], help="1 to mark read, 0 for unread")
+    batch_mark_p.add_argument("--starred", type=int, choices=[0, 1], help="1 to star, 0 to unstar")
+    batch_mark_p.add_argument("--from-search", help="Use search results as message IDs")
+    batch_mark_p.add_argument("--account", help="Account")
+    batch_mark_p.add_argument("--limit", type=int, default=100, help="Max results when using --from-search")
+
+    # tag
+    tag_p = subparsers.add_parser("tag", help="Manage email tags")
+    tag_subparsers = tag_p.add_subparsers(dest="tag_command", help="Tag subcommand")
+
+    # tag add <message_id> <tag>
+    tag_add = tag_subparsers.add_parser("add", help="Add tag to email")
+    tag_add.add_argument("message_id", help="Message ID")
+    tag_add.add_argument("tag", help="Tag to add")
+
+    # tag remove <message_id> <tag>
+    tag_remove = tag_subparsers.add_parser("remove", help="Remove tag from email")
+    tag_remove.add_argument("message_id", help="Message ID")
+    tag_remove.add_argument("tag", help="Tag to remove")
+
+    # tag list <message_id>
+    tag_list = tag_subparsers.add_parser("list", help="List tags on email")
+    tag_list.add_argument("message_id", help="Message ID")
+
+    # tag batch-add <tag> --from-search <query>
+    tag_batch = tag_subparsers.add_parser("batch-add", help="Add tag to multiple emails")
+    tag_batch.add_argument("tag", help="Tag to add")
+    tag_batch.add_argument("--from-search", required=True, help="Search query to find emails")
+    tag_batch.add_argument("--limit", type=int, default=100, help="Max emails to tag")
+    tag_batch.add_argument("--account", help="Account")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -1619,6 +1887,10 @@ def main():
         cmd_classify(args, config, db)
     elif args.command == "reclassify":
         cmd_reclassify(args, config, db)
+    elif args.command == "batch-mark":
+        cmd_batch_mark(args, config, db)
+    elif args.command == "tag":
+        cmd_tag(args, config, db)
 
 
 if __name__ == "__main__":
