@@ -401,6 +401,10 @@ def cmd_search(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
     paths = _get_account_paths(config, client.email)
     isolated_db = MailDatabase(paths["db_path"])
 
+    # Get classification filters
+    importance = getattr(args, "importance", None)
+    category = getattr(args, "category", None)
+
     if args.query:
         if getattr(args, "hybrid", False):
             results = isolated_db.search_hybrid(args.query, limit=args.limit)
@@ -423,6 +427,10 @@ def cmd_search(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
                 args.has_attachment
             ):
                 continue
+            if importance and r.get("importance") != importance:
+                continue
+            if category and r.get("category") != category:
+                continue
             filtered.append(r)
         results = filtered
     else:
@@ -434,6 +442,8 @@ def cmd_search(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
             subject=args.subject,
             is_read=args.is_read,
             has_attachment=args.has_attachment,
+            importance=importance,
+            category=category,
             limit=args.limit,
         )
 
@@ -449,6 +459,8 @@ def cmd_search(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
                 "date": r["date"],
                 "folder": r["folder"],
                 "is_read": r["is_read"],
+                "importance": r.get("importance", "normal"),
+                "category": r.get("category", "uncategorized"),
                 "snippet": r["body_text"][:100] + "..."
                 if r["body_text"] and len(r["body_text"]) > 100
                 else r["body_text"],
@@ -1250,6 +1262,108 @@ def cmd_thread(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
     print(table_md)
 
 
+def cmd_classify(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Classify emails automatically or get classification for one email."""
+    from mail_manager.classifier import EmailClassifier
+
+    client = get_client(config, getattr(args, "account", None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths["db_path"])
+
+    message_id = getattr(args, "message_id", None)
+
+    if message_id:
+        # Classify single email
+        email = isolated_db.get_email(message_id)
+        if not email:
+            print(json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, f"Email {message_id} not found")))
+            return
+
+        classifier = EmailClassifier()
+        classification = classifier.classify(email)
+
+        # Save to database
+        isolated_db.update_classification(
+            message_id=message_id,
+            importance=classification.importance,
+            category=classification.category,
+            confidence=classification.confidence,
+        )
+
+        print(
+            json.dumps(
+                success_response(
+                    data={
+                        "message_id": message_id,
+                        "importance": classification.importance,
+                        "category": classification.category,
+                        "confidence": classification.confidence,
+                        "matched_rules": classification.matched_rules,
+                    }
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        # Classify all unclassified emails
+        emails = isolated_db.search_emails(limit=args.limit)
+        classifier = EmailClassifier()
+        count = 0
+        for email in emails:
+            # Check if needs classification (default values)
+            if email.get("importance") == "normal" and email.get("category") == "uncategorized":
+                classification = classifier.classify(email)
+                isolated_db.update_classification(
+                    message_id=email["message_id"],
+                    importance=classification.importance,
+                    category=classification.category,
+                    confidence=classification.confidence,
+                )
+                count += 1
+        print(json.dumps(success_response(data={"classified": count})))
+
+
+def cmd_reclassify(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Manually reclassify an email."""
+    client = get_client(config, getattr(args, "account", None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths["db_path"])
+
+    message_id = args.message_id
+    importance = getattr(args, "importance", None)
+    category = getattr(args, "category", None)
+
+    email = isolated_db.get_email(message_id)
+    if not email:
+        print(json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, f"Email {message_id} not found")))
+        return
+
+    # Update with manual override flag
+    isolated_db.update_classification(
+        message_id=message_id,
+        importance=importance,
+        category=category,
+        confidence=1.0,  # Manual classification has full confidence
+        manual_override=True,
+    )
+
+    print(
+        json.dumps(
+            success_response(
+                data={
+                    "message_id": message_id,
+                    "importance": importance,
+                    "category": category,
+                    "manual_override": True,
+                }
+            ),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 def cmd_rebuild_index(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
     """Rebuild ChromaDB index for vector search."""
     client = get_client(config, getattr(args, "account", None))
@@ -1352,6 +1466,14 @@ def main():
     search_p.add_argument("--subject", help="Filter by subject")
     search_p.add_argument("--is-read", type=int, choices=[0, 1], help="1 for read, 0 for unread")
     search_p.add_argument("--has-attachment", type=int, choices=[0, 1], help="1 for has attachment")
+    search_p.add_argument(
+        "--importance", choices=["critical", "high", "normal", "low"], help="Filter by importance level"
+    )
+    search_p.add_argument(
+        "--category",
+        choices=["work", "personal", "notification", "promo", "uncategorized"],
+        help="Filter by category",
+    )
     search_p.add_argument("--limit", type=int, default=20, help="Max results")
 
     # smart-search
@@ -1441,6 +1563,19 @@ def main():
     )
     rebuild_p.add_argument("--account", help="Account to rebuild indices for")
 
+    # classify
+    classify_p = subparsers.add_parser("classify", help="Classify emails by importance and category")
+    classify_p.add_argument("message_id", nargs="?", help="Message ID to classify (optional, defaults to all)")
+    classify_p.add_argument("--account", help="Account to classify emails from")
+    classify_p.add_argument("--limit", type=int, default=100, help="Max emails to classify when batch mode")
+
+    # reclassify
+    reclassify_p = subparsers.add_parser("reclassify", help="Manually reclassify an email")
+    reclassify_p.add_argument("message_id", help="Message ID to reclassify")
+    reclassify_p.add_argument("--importance", choices=["critical", "high", "normal", "low"], help="New importance level")
+    reclassify_p.add_argument("--category", choices=["work", "personal", "notification", "promo", "uncategorized"], help="New category")
+    reclassify_p.add_argument("--account", help="Account the email belongs to")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -1480,6 +1615,10 @@ def main():
         cmd_thread(args, config, db)
     elif args.command == "rebuild-index":
         cmd_rebuild_index(args, config, db)
+    elif args.command == "classify":
+        cmd_classify(args, config, db)
+    elif args.command == "reclassify":
+        cmd_reclassify(args, config, db)
 
 
 if __name__ == "__main__":
