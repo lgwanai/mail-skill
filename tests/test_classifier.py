@@ -5,90 +5,90 @@ This module contains test stubs for the EmailClassifier functionality.
 Tests are marked as skip until implementation is complete.
 """
 
+import os
+import tempfile
 import pytest
 
 from scripts.mail_manager.classifier import Classification, Rule, ClassificationResult
+from scripts.mail_manager.rules import load_rules, get_default_rules, DEFAULT_RULES_PATH
 
 
 class TestClassificationDataclass:
     """Tests for Classification dataclass."""
 
-    @pytest.mark.skip(reason="Implementation pending")
     def test_classification_creation(self) -> None:
-        """
-        Test that Classification can be created with required fields.
+        """Test that Classification can be created with required fields."""
+        classification = Classification(
+            importance="high",
+            category="work",
+            confidence=0.85,
+        )
+        assert classification.importance == "high"
+        assert classification.category == "work"
+        assert classification.confidence == 0.85
+        assert classification.matched_rules == []
+        assert classification.manual_override is False
 
-        Should verify:
-        - importance is set correctly
-        - category is set correctly
-        - confidence is set correctly
-        - matched_rules defaults to empty list
-        - manual_override defaults to False
-        """
-        pass
-
-    @pytest.mark.skip(reason="Implementation pending")
     def test_classification_with_matched_rules(self) -> None:
-        """
-        Test Classification with matched rules.
+        """Test Classification with matched rules."""
+        classification = Classification(
+            importance="critical",
+            category="work",
+            confidence=0.95,
+            matched_rules=["Critical Senders", "Urgent Keywords"],
+        )
+        assert len(classification.matched_rules) == 2
+        assert "Critical Senders" in classification.matched_rules
 
-        Should verify:
-        - matched_rules list is populated correctly
-        - all rule names are preserved
-        """
-        pass
-
-    @pytest.mark.skip(reason="Implementation pending")
     def test_classification_manual_override(self) -> None:
-        """
-        Test Classification with manual override flag.
-
-        Should verify:
-        - manual_override can be set to True
-        - default is False
-        """
-        pass
+        """Test Classification with manual override flag."""
+        classification = Classification(
+            importance="low",
+            category="promo",
+            confidence=1.0,
+            manual_override=True,
+        )
+        assert classification.manual_override is True
 
 
 class TestRuleDataclass:
     """Tests for Rule dataclass."""
 
-    @pytest.mark.skip(reason="Implementation pending")
     def test_rule_creation(self) -> None:
-        """
-        Test that Rule can be created with required fields.
+        """Test that Rule can be created with required fields."""
+        rule = Rule(
+            name="Test Rule",
+            rule_type="sender",
+            patterns=["test@example.com"],
+        )
+        assert rule.name == "Test Rule"
+        assert rule.rule_type == "sender"
+        assert rule.patterns == ["test@example.com"]
+        assert rule.weight == 1.0
 
-        Should verify:
-        - name is set correctly
-        - rule_type is set correctly
-        - patterns list is populated
-        - weight defaults to 1.0
-        """
-        pass
-
-    @pytest.mark.skip(reason="Implementation pending")
     def test_rule_with_optional_fields(self) -> None:
-        """
-        Test Rule with optional importance and category.
+        """Test Rule with optional importance and category."""
+        rule = Rule(
+            name="Test Rule",
+            rule_type="keyword",
+            patterns=["urgent", "important"],
+            importance="high",
+            category="work",
+            weight=1.5,
+        )
+        assert rule.importance == "high"
+        assert rule.category == "work"
+        assert rule.weight == 1.5
 
-        Should verify:
-        - importance can be set
-        - category can be set
-        - weight can be customized
-        """
-        pass
-
-    @pytest.mark.skip(reason="Implementation pending")
     def test_rule_types(self) -> None:
-        """
-        Test different rule types.
+        """Test different rule types."""
+        sender_rule = Rule(name="Sender", rule_type="sender", patterns=["a@b.com"])
+        keyword_rule = Rule(name="Keyword", rule_type="keyword", patterns=["urgent"])
+        pattern_rule = Rule(name="Pattern", rule_type="sender_pattern", patterns=["@company\\.com$"])
 
-        Should verify:
-        - sender type rules work correctly
-        - keyword type rules work correctly
-        - sender_pattern type rules work correctly
-        """
-        pass
+        assert sender_rule.rule_type == "sender"
+        assert keyword_rule.rule_type == "keyword"
+        assert pattern_rule.rule_type == "sender_pattern"
 
 
 class TestClassificationResultDataclass:
@@ -110,66 +110,109 @@ class TestClassificationResultDataclass:
 class TestLoadRules:
     """Tests for load_rules function."""
 
-    @pytest.mark.skip(reason="Implementation pending")
-    def test_load_rules_default(self) -> None:
-        """
-        Test loading default rules from configuration file.
+    def test_load_rules_default_path(self) -> None:
+        """Test loading rules from default path."""
+        # This test requires the default config file to exist
+        if os.path.exists(DEFAULT_RULES_PATH):
+            rules = load_rules()
+            assert isinstance(rules, list)
+            assert len(rules) > 0
+            for rule in rules:
+                assert isinstance(rule, Rule)
+                assert rule.name
+                assert rule.rule_type
+                assert rule.patterns
 
-        Should verify:
-        - rules are loaded from default path
-        - returned list contains Rule objects
-        - rules have valid structure
-        """
-        pass
-
-    @pytest.mark.skip(reason="Implementation pending")
     def test_load_rules_custom_path(self) -> None:
-        """
-        Test loading rules from custom path.
+        """Test loading rules from custom path."""
+        yaml_content = """
+rules:
+  - name: "Test Rule"
+    type: keyword
+    patterns:
+      - "test"
+    importance: high
+    weight: 1.5
+"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            f.write(yaml_content)
+            temp_path = f.name
 
-        Should verify:
-        - rules are loaded from specified path
-        - custom rules override defaults
-        """
-        pass
+        try:
+            rules = load_rules(temp_path)
+            assert len(rules) == 1
+            assert rules[0].name == "Test Rule"
+            assert rules[0].rule_type == "keyword"
+            assert rules[0].importance == "high"
+            assert rules[0].weight == 1.5
+        finally:
+            os.unlink(temp_path)
 
-    @pytest.mark.skip(reason="Implementation pending")
-    def test_load_rules_invalid_path(self) -> None:
-        """
-        Test handling of invalid path.
+    def test_load_rules_fallback(self) -> None:
+        """Test fallback to default rules when file not found."""
+        rules = load_rules("/nonexistent/path/to/rules.yaml")
+        # Should return default rules
+        assert isinstance(rules, list)
+        assert len(rules) > 0
+        for rule in rules:
+            assert isinstance(rule, Rule)
 
-        Should verify:
-        - appropriate error is raised
-        - or returns empty list with warning
-        """
-        pass
+    def test_load_rules_invalid_yaml(self) -> None:
+        """Test handling of invalid YAML."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            f.write("invalid: yaml: content: [")
+            temp_path = f.name
+
+        try:
+            with pytest.raises(ValueError, match="Invalid rules configuration"):
+                load_rules(temp_path)
+        finally:
+            os.unlink(temp_path)
+
+    def test_load_rules_empty_file(self) -> None:
+        """Test handling of empty YAML file."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            f.write("")
+            temp_path = f.name
+
+        try:
+            rules = load_rules(temp_path)
+            # Should return empty list or default rules
+            assert isinstance(rules, list)
+        finally:
+            os.unlink(temp_path)
 
 
 class TestGetDefaultRules:
     """Tests for get_default_rules function."""
 
-    @pytest.mark.skip(reason="Implementation pending")
     def test_get_default_rules_returns_list(self) -> None:
-        """
-        Test that get_default_rules returns a list.
+        """Test that get_default_rules returns a list."""
+        rules = get_default_rules()
+        assert isinstance(rules, list)
+        assert len(rules) > 0
 
-        Should verify:
-        - returns list of Rule objects
-        - list is not empty
-        """
-        pass
-
-    @pytest.mark.skip(reason="Implementation pending")
     def test_get_default_rules_structure(self) -> None:
-        """
-        Test structure of default rules.
+        """Test structure of default rules."""
+        rules = get_default_rules()
+        for rule in rules:
+            assert isinstance(rule, Rule)
+            assert rule.name
+            assert rule.rule_type in ("sender", "keyword", "sender_pattern")
+            assert rule.patterns
+            assert 0 < rule.weight <= 2.0
 
-        Should verify:
-        - each rule has required fields
-        - each rule has valid rule_type
-        - weights are within expected range
-        """
-        pass
+    def test_get_default_rules_has_critical_senders(self) -> None:
+        """Test that default rules include critical sender patterns."""
+        rules = get_default_rules()
+        sender_rules = [r for r in rules if r.rule_type == "sender"]
+        assert len(sender_rules) > 0
+
+    def test_get_default_rules_has_urgent_keywords(self) -> None:
+        """Test that default rules include urgent keyword patterns."""
+        rules = get_default_rules()
+        keyword_rules = [r for r in rules if r.rule_type == "keyword"]
+        assert len(keyword_rules) > 0
 
 
 class TestClassifySenderMatch:
