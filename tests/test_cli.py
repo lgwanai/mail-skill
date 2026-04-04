@@ -1222,3 +1222,192 @@ class TestBatchMarkFromSearch:
         assert result["status"] == "success"
         assert result["updated_count"] == 1
 
+
+class TestCmdTag:
+    """Tests for cmd_tag command."""
+
+    @pytest.fixture
+    def mock_config(self, test_config: dict) -> dict:
+        """Create mock config with accounts."""
+        return {
+            "ACCOUNTS": {"test@example.com": test_config},
+            "STORAGE_ROOT": "/tmp/test",
+            "DB_PATH": "/tmp/test.db",
+            "ATTACHMENT_PATH": "/tmp/attachments",
+        }
+
+    def test_tag_add_adds_tag_to_email(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """tag add adds tag to email."""
+        from mail_cli import cmd_tag
+
+        args = MagicMock()
+        args.tag_command = "add"
+        args.message_id = "msg1@example.com"
+        args.tag = "important"
+
+        mock_db = MagicMock()
+        mock_db.get_email.return_value = {"message_id": "msg1@example.com"}
+        mock_db.get_tags.return_value = ["important"]
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    cmd_tag(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+
+        assert result["status"] == "success"
+        assert "important" in result["tags"]
+        mock_db.add_tags.assert_called_once_with("msg1@example.com", ["important"])
+
+    def test_tag_remove_removes_tag_from_email(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """tag remove removes tag from email."""
+        from mail_cli import cmd_tag
+
+        args = MagicMock()
+        args.tag_command = "remove"
+        args.message_id = "msg1@example.com"
+        args.tag = "important"
+
+        mock_db = MagicMock()
+        mock_db.get_email.return_value = {"message_id": "msg1@example.com"}
+        mock_db.get_tags.return_value = []
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    cmd_tag(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+
+        assert result["status"] == "success"
+        mock_db.remove_tags.assert_called_once_with("msg1@example.com", ["important"])
+
+    def test_tag_list_shows_all_tags(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """tag list shows all tags on an email."""
+        from mail_cli import cmd_tag
+
+        args = MagicMock()
+        args.tag_command = "list"
+        args.message_id = "msg1@example.com"
+
+        mock_db = MagicMock()
+        mock_db.get_email.return_value = {"message_id": "msg1@example.com"}
+        mock_db.get_tags.return_value = ["important", "work", "project-alpha"]
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    cmd_tag(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+
+        assert result["status"] == "success"
+        assert result["tags"] == ["important", "work", "project-alpha"]
+
+    def test_tag_batch_add_adds_tags_to_multiple_emails(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """tag batch-add adds tags to multiple emails."""
+        from mail_cli import cmd_tag
+
+        args = MagicMock()
+        args.tag_command = "batch-add"
+        args.tag = "project-alpha"
+        args.from_search = "project"
+        args.limit = 100
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = [
+            {"message_id": "msg1@example.com"},
+            {"message_id": "msg2@example.com"},
+            {"message_id": "msg3@example.com"},
+        ]
+        mock_db.batch_add_tags.return_value = 3
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    cmd_tag(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+
+        assert result["status"] == "success"
+        assert result["updated_count"] == 3
+        assert result["tag"] == "project-alpha"
+
+    def test_tag_add_returns_error_for_missing_email(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """tag add returns error when email not found."""
+        from mail_cli import cmd_tag
+
+        args = MagicMock()
+        args.tag_command = "add"
+        args.message_id = "nonexistent@example.com"
+        args.tag = "important"
+
+        mock_db = MagicMock()
+        mock_db.get_email.return_value = None
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    cmd_tag(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+
+        assert result["status"] == "error"
+        assert result["code"] == ErrorCodes.USER_EMAIL_NOT_FOUND
+
