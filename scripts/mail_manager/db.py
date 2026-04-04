@@ -537,6 +537,8 @@ class MailDatabase:
         date_to: str | None = None,
         has_attachment: bool | None = None,
         is_read: bool | None = None,
+        importance: str | None = None,
+        category: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict]:
@@ -552,6 +554,8 @@ class MailDatabase:
             date_to: Filter by end date.
             has_attachment: Filter by attachment presence.
             is_read: Filter by read status.
+            importance: Filter by importance level (critical/high/normal/low).
+            category: Filter by category (work/personal/notification/promo/uncategorized).
             limit: Maximum number of results.
             offset: Number of results to skip.
 
@@ -592,6 +596,14 @@ class MailDatabase:
         if is_read is not None:
             sql += " AND is_read = ?"
             params.append(is_read)
+
+        if importance:
+            sql += " AND importance = ?"
+            params.append(importance)
+
+        if category:
+            sql += " AND category = ?"
+            params.append(category)
 
         if query:
             sql += " AND (subject LIKE ? OR body_text LIKE ? OR sender LIKE ?)"

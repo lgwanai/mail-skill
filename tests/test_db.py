@@ -453,3 +453,84 @@ class TestUpdateClassification:
         assert "category" in result
         assert "classification_confidence" in result
         assert "manual_override" in result
+
+
+class TestSearchByClassification:
+    """Tests for classification filtering in search_emails."""
+
+    @pytest.fixture
+    def db(self, temp_db_path, mock_chroma_collection):
+        """Create a MailDatabase with temp storage."""
+        return MailDatabase(temp_db_path)
+
+    def test_search_by_importance(self, db, sample_email_data):
+        """Test search_emails filters by importance."""
+        sample_email_data["message_id"] = "high-email@test.com"
+        db.save_email(sample_email_data)
+        db.update_classification("high-email@test.com", importance="high", category="work")
+
+        sample_email_data["message_id"] = "low-email@test.com"
+        sample_email_data["sender"] = "low@test.com"
+        db.save_email(sample_email_data)
+        db.update_classification("low-email@test.com", importance="low", category="promo")
+
+        # Search for high importance
+        results = db.search_emails(importance="high")
+        assert len(results) == 1
+        assert results[0]["importance"] == "high"
+
+    def test_search_by_category(self, db, sample_email_data):
+        """Test search_emails filters by category."""
+        sample_email_data["message_id"] = "work-email@test.com"
+        db.save_email(sample_email_data)
+        db.update_classification("work-email@test.com", importance="normal", category="work")
+
+        sample_email_data["message_id"] = "personal-email@test.com"
+        sample_email_data["sender"] = "personal@test.com"
+        db.save_email(sample_email_data)
+        db.update_classification("personal-email@test.com", importance="normal", category="personal")
+
+        # Search for work category
+        results = db.search_emails(category="work")
+        assert len(results) == 1
+        assert results[0]["category"] == "work"
+
+    def test_search_by_importance_and_category(self, db, sample_email_data):
+        """Test search_emails filters by both importance and category."""
+        sample_email_data["message_id"] = "critical-work@test.com"
+        db.save_email(sample_email_data)
+        db.update_classification("critical-work@test.com", importance="critical", category="work")
+
+        sample_email_data["message_id"] = "high-work@test.com"
+        sample_email_data["sender"] = "high@test.com"
+        db.save_email(sample_email_data)
+        db.update_classification("high-work@test.com", importance="high", category="work")
+
+        sample_email_data["message_id"] = "critical-personal@test.com"
+        sample_email_data["sender"] = "personal@test.com"
+        db.save_email(sample_email_data)
+        db.update_classification("critical-personal@test.com", importance="critical", category="personal")
+
+        # Search for critical + work
+        results = db.search_emails(importance="critical", category="work")
+        assert len(results) == 1
+        assert results[0]["importance"] == "critical"
+        assert results[0]["category"] == "work"
+
+    def test_search_classification_with_other_filters(self, db, sample_email_data):
+        """Test classification filters work with other filters."""
+        sample_email_data["message_id"] = "email1@test.com"
+        sample_email_data["sender"] = "boss@company.com"
+        db.save_email(sample_email_data)
+        db.update_classification("email1@test.com", importance="high", category="work")
+
+        sample_email_data["message_id"] = "email2@test.com"
+        sample_email_data["sender"] = "friend@gmail.com"
+        db.save_email(sample_email_data)
+        db.update_classification("email2@test.com", importance="normal", category="personal")
+
+        # Search with sender + importance filter
+        results = db.search_emails(sender="boss", importance="high")
+        assert len(results) == 1
+        assert "boss" in results[0]["sender"]
+        assert results[0]["importance"] == "high"
