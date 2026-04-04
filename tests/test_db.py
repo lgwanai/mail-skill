@@ -534,3 +534,193 @@ class TestSearchByClassification:
         assert len(results) == 1
         assert "boss" in results[0]["sender"]
         assert results[0]["importance"] == "high"
+
+
+class TestBatchUpdateFlags:
+    """Tests for batch_update_flags method."""
+
+    @pytest.fixture
+    def db(self, temp_db_path, mock_chroma_collection):
+        """Create a MailDatabase with temp storage."""
+        return MailDatabase(temp_db_path)
+
+    def test_batch_update_flags_updates_is_read(self, db, sample_email_data):
+        """Test batch_update_flags updates is_read for multiple emails."""
+        # Save multiple emails
+        message_ids = []
+        for i in range(3):
+            email = sample_email_data.copy()
+            email["message_id"] = f"batch-read-{i}@example.com"
+            email["is_read"] = False
+            db.save_email(email)
+            message_ids.append(email["message_id"])
+
+        # Batch update to read
+        count = db.batch_update_flags(message_ids, is_read=True)
+        assert count == 3
+
+        # Verify all are read
+        for msg_id in message_ids:
+            email = db.get_email(msg_id)
+            assert email["is_read"] in (True, 1)
+
+    def test_batch_update_flags_updates_is_starred(self, db, sample_email_data):
+        """Test batch_update_flags updates is_starred for multiple emails."""
+        # Save multiple emails
+        message_ids = []
+        for i in range(3):
+            email = sample_email_data.copy()
+            email["message_id"] = f"batch-star-{i}@example.com"
+            email["is_starred"] = False
+            db.save_email(email)
+            message_ids.append(email["message_id"])
+
+        # Batch update to starred
+        count = db.batch_update_flags(message_ids, is_starred=True)
+        assert count == 3
+
+        # Verify all are starred
+        for msg_id in message_ids:
+            email = db.get_email(msg_id)
+            assert email["is_starred"] in (True, 1)
+
+    def test_batch_update_flags_skips_nonexistent(self, db, sample_email_data):
+        """Test batch_update_flags skips non-existent message_ids silently."""
+        # Save one email
+        email = sample_email_data.copy()
+        email["message_id"] = "exists-batch@example.com"
+        email["is_read"] = False
+        db.save_email(email)
+
+        # Try to update existing and non-existent
+        count = db.batch_update_flags(
+            ["exists-batch@example.com", "nonexistent1@example.com", "nonexistent2@example.com"],
+            is_read=True,
+        )
+        # Only 1 email exists, so only 1 should be updated
+        assert count == 1
+
+    def test_batch_update_flags_empty_list(self, db):
+        """Test batch_update_flags returns 0 for empty list."""
+        count = db.batch_update_flags([], is_read=True)
+        assert count == 0
+
+    def test_batch_update_flags_single_sql_statement(self, db, sample_email_data):
+        """Test batch_update_flags uses single SQL statement for efficiency."""
+        # Save multiple emails
+        message_ids = []
+        for i in range(5):
+            email = sample_email_data.copy()
+            email["message_id"] = f"batch-eff-{i}@example.com"
+            db.save_email(email)
+            message_ids.append(email["message_id"])
+
+        # Update should use IN clause (single statement)
+        count = db.batch_update_flags(message_ids, is_read=True)
+        assert count == 5
+
+
+class TestTagManagement:
+    """Tests for tag management methods."""
+
+    @pytest.fixture
+    def db(self, temp_db_path, mock_chroma_collection):
+        """Create a MailDatabase instance for testing."""
+        return MailDatabase(temp_db_path)
+
+    def test_get_tags_returns_empty_for_no_tags(self, db, sample_email_data):
+        """get_tags returns empty list for email with no tags."""
+        db.save_email(sample_email_data)
+        tags = db.get_tags(sample_email_data["message_id"])
+        assert tags == []
+
+    def test_get_tags_returns_tags(self, db, sample_email_data):
+        """get_tags returns tags stored in labels column."""
+        sample_email_data["labels"] = ["important", "project-alpha"]
+        db.save_email(sample_email_data)
+        tags = db.get_tags(sample_email_data["message_id"])
+        assert "important" in tags
+        assert "project-alpha" in tags
+
+    def test_add_tags_adds_new_tags(self, db, sample_email_data):
+        """add_tags adds tags to email."""
+        db.save_email(sample_email_data)
+        db.add_tags(sample_email_data["message_id"], ["work", "urgent"])
+        tags = db.get_tags(sample_email_data["message_id"])
+        assert "work" in tags
+        assert "urgent" in tags
+
+    def test_add_tags_does_not_duplicate(self, db, sample_email_data):
+        """add_tags does not create duplicate tags."""
+        db.save_email(sample_email_data)
+        db.add_tags(sample_email_data["message_id"], ["work"])
+        db.add_tags(sample_email_data["message_id"], ["work", "urgent"])
+        tags = db.get_tags(sample_email_data["message_id"])
+        assert tags.count("work") == 1
+        assert "urgent" in tags
+
+    def test_remove_tags_removes_specified(self, db, sample_email_data):
+        """remove_tags removes only specified tags."""
+        sample_email_data["labels"] = ["work", "urgent", "follow-up"]
+        db.save_email(sample_email_data)
+        db.remove_tags(sample_email_data["message_id"], ["urgent"])
+        tags = db.get_tags(sample_email_data["message_id"])
+        assert "work" in tags
+        assert "urgent" not in tags
+        assert "follow-up" in tags
+
+    def test_remove_tags_ignores_nonexistent(self, db, sample_email_data):
+        """remove_tags ignores tags not present."""
+        sample_email_data["labels"] = ["work"]
+        db.save_email(sample_email_data)
+        db.remove_tags(sample_email_data["message_id"], ["nonexistent"])
+        tags = db.get_tags(sample_email_data["message_id"])
+        assert tags == ["work"]
+
+
+class TestBatchTagOperations:
+    """Tests for batch tag operations."""
+
+    @pytest.fixture
+    def db(self, temp_db_path, mock_chroma_collection):
+        """Create a MailDatabase instance for testing."""
+        return MailDatabase(temp_db_path)
+
+    def test_batch_add_tags_adds_to_multiple(self, db, sample_email_data):
+        """batch_add_tags adds tags to multiple emails."""
+        message_ids = []
+        for i in range(3):
+            email = sample_email_data.copy()
+            email["message_id"] = f"batch-tag-{i}@example.com"
+            db.save_email(email)
+            message_ids.append(email["message_id"])
+
+        count = db.batch_add_tags(message_ids, ["project-x"])
+        assert count == 3
+
+        for mid in message_ids:
+            tags = db.get_tags(mid)
+            assert "project-x" in tags
+
+    def test_batch_remove_tags_from_multiple(self, db, sample_email_data):
+        """batch_remove_tags removes tags from multiple emails."""
+        message_ids = []
+        for i in range(3):
+            email = sample_email_data.copy()
+            email["message_id"] = f"batch-rm-{i}@example.com"
+            email["labels"] = ["project-x", "keep-me"]
+            db.save_email(email)
+            message_ids.append(email["message_id"])
+
+        count = db.batch_remove_tags(message_ids, ["project-x"])
+        assert count == 3
+
+        for mid in message_ids:
+            tags = db.get_tags(mid)
+            assert "project-x" not in tags
+            assert "keep-me" in tags
+
+    def test_batch_add_tags_empty_list_returns_zero(self, db):
+        """batch_add_tags returns 0 for empty list."""
+        count = db.batch_add_tags([], ["tag"])
+        assert count == 0

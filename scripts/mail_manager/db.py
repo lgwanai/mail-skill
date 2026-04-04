@@ -708,6 +708,50 @@ class MailDatabase:
             cursor.execute(sql, params)
             conn.commit()
 
+    def batch_update_flags(
+        self,
+        message_ids: list[str],
+        is_read: bool | None = None,
+        is_starred: bool | None = None,
+    ) -> int:
+        """Update flags for multiple emails in a single transaction.
+
+        Args:
+            message_ids: List of email message IDs to update.
+            is_read: New read status, if updating.
+            is_starred: New starred status, if updating.
+
+        Returns:
+            int: Count of updated rows.
+        """
+        if not message_ids:
+            return 0
+
+        updates: list[str] = []
+        params: list[Any] = []
+
+        if is_read is not None:
+            updates.append("is_read = ?")
+            params.append(is_read)
+
+        if is_starred is not None:
+            updates.append("is_starred = ?")
+            params.append(is_starred)
+
+        if not updates:
+            return 0
+
+        # Use IN clause for batch update
+        placeholders = ", ".join(["?"] * len(message_ids))
+        sql = f"UPDATE emails SET {', '.join(updates)} WHERE message_id IN ({placeholders})"
+        params.extend(message_ids)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql, params)
+            conn.commit()
+            return cursor.rowcount
+
     def update_classification(
         self,
         message_id: str,
@@ -786,3 +830,98 @@ class MailDatabase:
             )
             rows = cursor.fetchall()
             return [row["sender"] for row in rows]
+
+    # Tag management methods
+
+    def get_tags(self, message_id: str) -> list[str]:
+        """Get tags (labels) for an email.
+
+        Args:
+            message_id: The email message ID.
+
+        Returns:
+            list[str]: List of tags, empty if none or email not found.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT labels FROM emails WHERE message_id = ?", (message_id,)
+            )
+            row = cursor.fetchone()
+            if row and row["labels"]:
+                return json.loads(row["labels"])
+            return []
+
+    def add_tags(self, message_id: str, tags: list[str]) -> None:
+        """Add tags to an email.
+
+        Args:
+            message_id: The email message ID.
+            tags: Tags to add (deduplicated with existing).
+        """
+        current_tags = self.get_tags(message_id)
+        # Merge and deduplicate, creating new list (immutable pattern)
+        new_tags = list(set(current_tags + tags))
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE emails SET labels = ? WHERE message_id = ?",
+                (json.dumps(new_tags), message_id),
+            )
+            conn.commit()
+
+    def remove_tags(self, message_id: str, tags: list[str]) -> None:
+        """Remove tags from an email.
+
+        Args:
+            message_id: The email message ID.
+            tags: Tags to remove.
+        """
+        current_tags = self.get_tags(message_id)
+        # Filter out removed tags (immutable pattern - create new list)
+        new_tags = [t for t in current_tags if t not in tags]
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE emails SET labels = ? WHERE message_id = ?",
+                (json.dumps(new_tags), message_id),
+            )
+            conn.commit()
+
+    def batch_add_tags(self, message_ids: list[str], tags: list[str]) -> int:
+        """Add tags to multiple emails.
+
+        Args:
+            message_ids: List of email message IDs.
+            tags: Tags to add to all emails.
+
+        Returns:
+            int: Count of updated emails.
+        """
+        if not message_ids or not tags:
+            return 0
+
+        count = 0
+        for message_id in message_ids:
+            self.add_tags(message_id, tags)
+            count += 1
+        return count
+
+    def batch_remove_tags(self, message_ids: list[str], tags: list[str]) -> int:
+        """Remove tags from multiple emails.
+
+        Args:
+            message_ids: List of email message IDs.
+            tags: Tags to remove from all emails.
+
+        Returns:
+            int: Count of updated emails.
+        """
+        if not message_ids or not tags:
+            return 0
+
+        count = 0
+        for message_id in message_ids:
+            self.remove_tags(message_id, tags)
+            count += 1
+        return count
