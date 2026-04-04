@@ -1,0 +1,255 @@
+# Classification Rules Configuration
+#
+# This file defines rules for automatic email classification.
+# Each rule can assign importance (critical/high/normal/low) and
+# category (work/personal/notification/promo/uncategorized).
+#
+# Rule Types:
+#   - sender: Exact email address match
+#   - keyword: Case-insensitive text match in subject/body
+#   - sender_pattern: Regex pattern matched against sender email
+#
+# Weight determines confidence contribution (1.0-2.0, higher = more confident)
+
+rules:
+  # ===========================================
+  # CRITICAL IMPORTANCE - Immediate attention
+  # ===========================================
+
+  - name: "Critical Senders - Management"
+    type: sender
+    patterns:
+      - "boss@company.com"
+      - "ceo@company.com"
+      - "hr@company.com"
+      - "cfo@company.com"
+      - "cto@company.com"
+    importance: critical
+    category: work
+    weight: 2.0
+
+  - name: "Urgent Keywords"
+    type: keyword
+    patterns:
+      - "紧急"
+      - "urgent"
+      - "重要"
+      - "important"
+      - "asap"
+      - "ASAP"
+      - "立即"
+      - "马上"
+    importance: critical
+    weight: 1.5
+
+  # ===========================================
+  # HIGH IMPORTANCE - Prompt attention needed
+  # ===========================================
+
+  - name: "Verification Codes"
+    type: keyword
+    patterns:
+      - "验证码"
+      - "verification code"
+      - "安全码"
+      - "activation code"
+      - "确认码"
+      - "动态密码"
+    category: notification
+    importance: high
+    weight: 2.0
+
+  - name: "Action Required Keywords"
+    type: keyword
+    patterns:
+      - "请回复"
+      - "请确认"
+      - "请查收"
+      - "action required"
+      - "please reply"
+      - "确认收到"
+    importance: high
+    weight: 1.5
+
+  - name: "Financial Keywords"
+    type: keyword
+    patterns:
+      - "账单"
+      - "invoice"
+      - "付款"
+      - "payment"
+      - "收据"
+      - "receipt"
+      - "合同"
+      - "contract"
+    importance: high
+    category: work
+    weight: 1.5
+
+  - name: "Meeting and Interview"
+    type: keyword
+    patterns:
+      - "面试"
+      - "interview"
+      - "offer"
+      - "会议"
+      - "meeting"
+      - "预约"
+      - "appointment"
+    importance: high
+    weight: 1.3
+
+  # ===========================================
+  # WORK CATEGORY - Business communications
+  # ===========================================
+
+  - name: "Work Domain Senders"
+    type: sender_pattern
+    patterns:
+      - "@company\\.com$"
+      - "@internal\\.company\\.com$"
+      - "@corp\\.com$"
+      - "@office\\.com$"
+    category: work
+    importance: normal
+    weight: 1.0
+
+  - name: "Project Keywords"
+    type: keyword
+    patterns:
+      - "项目"
+      - "project"
+      - "任务"
+      - "task"
+      - "进度"
+      - "progress"
+      - "报告"
+      - "report"
+    category: work
+    importance: normal
+    weight: 1.0
+
+  # ===========================================
+  # PERSONAL CATEGORY - Personal communications
+  # ===========================================
+
+  - name: "Personal Email Domains"
+    type: sender_pattern
+    patterns:
+      - "@qq\\.com$"
+      - "@163\\.com$"
+      - "@126\\.com$"
+      - "@gmail\\.com$"
+      - "@outlook\\.com$"
+      - "@hotmail\\.com$"
+      - "@yahoo\\.com$"
+      - "@icloud\\.com$"
+    category: personal
+    weight: 0.8
+
+  - name: "Personal Keywords"
+    type: keyword
+    patterns:
+      - "生日"
+      - "birthday"
+      - "聚会"
+      - "party"
+      - "邀请"
+      - "invitation"
+      - "家人"
+      - "family"
+    category: personal
+    importance: normal
+    weight: 1.0
+
+  # ===========================================
+  # PROMO CATEGORY - Marketing and newsletters
+  # ===========================================
+
+  - name: "Promotional Keywords"
+    type: keyword
+    patterns:
+      - "促销"
+      - "优惠"
+      - "折扣"
+      - "discount"
+      - "sale"
+      - "特价"
+      - "限时"
+      - "limited time"
+    category: promo
+    importance: low
+    weight: 1.2
+
+  - name: "Newsletter Indicators"
+    type: keyword
+    patterns:
+      - "unsubscribe"
+      - "退订"
+      - "取消订阅"
+      - "newsletter"
+      - "周刊"
+      - "订阅"
+    category: promo
+    importance: low
+    weight: 1.3
+
+  - name: "Marketing Domains"
+    type: sender_pattern
+    patterns:
+      - "@marketing\\."
+      - "@promo\\."
+      - "@newsletter\\."
+      - "@email\\."
+      - "@mail\\."
+      - "noreply@"
+      - "no-reply@"
+    category: promo
+    importance: low
+    weight: 1.0
+
+  # ===========================================
+  # NOTIFICATION CATEGORY - Automated messages
+  # ===========================================
+
+  - name: "Notification Keywords"
+    type: keyword
+    patterns:
+      - "通知"
+      - "notification"
+      - "提醒"
+      - "reminder"
+      - "系统消息"
+      - "自动回复"
+      - "auto-reply"
+      - "自动回复"
+    category: notification
+    importance: normal
+    weight: 1.0
+
+  - name: "System Notifications"
+    type: sender_pattern
+    patterns:
+      - "@notifications\\."
+      - "@system\\."
+      - "@alerts\\."
+      - "notifications@"
+      - "alerts@"
+    category: notification
+    importance: normal
+    weight: 1.0
+
+  # ===========================================
+  # LOW IMPORTANCE - Bulk or low-priority
+  # ===========================================
+
+  - name: "Low Priority Indicators"
+    type: keyword
+    patterns:
+      - "广告"
+      - "advertisement"
+      - "推广"
+      - "订阅消息"
+      - "如果不想接收"
+    importance: low
+    weight: 1.0
