@@ -801,3 +801,47 @@ class TestCmdSmartSearch:
         assert "parsed_query" not in result
         assert result["status"] == "success"
 
+    def test_sender_cache_reduces_db_calls(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Sender cache reduces subsequent database calls."""
+        import mail_cli
+
+        # Clear cache first
+        mail_cli._sender_cache.clear()
+
+        from mail_cli import cmd_smart_search
+
+        args = MagicMock()
+        args.query = "test"
+        args.account = None
+        args.limit = 20
+
+        mock_db = MagicMock()
+        mock_db.get_unique_senders.return_value = []
+        mock_db.search_hybrid.return_value = []
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    # First call
+                    cmd_smart_search(args, mock_config, MagicMock())
+                    first_call_count = mock_db.get_unique_senders.call_count
+
+                    # Second call (should use cache)
+                    cmd_smart_search(args, mock_config, MagicMock())
+                    second_call_count = mock_db.get_unique_senders.call_count
+
+        # First call should have called get_unique_senders once
+        assert first_call_count == 1
+        # Second call should NOT have increased the call count (cache hit)
+        assert second_call_count == 1
+
