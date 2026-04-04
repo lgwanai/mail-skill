@@ -11,7 +11,11 @@ from datetime import date
 
 import pytest
 
-from scripts.mail_manager.date_parser import DateRange, parse_date_expression
+from scripts.mail_manager.date_parser import (
+    DateRange,
+    extract_date_from_query,
+    parse_date_expression,
+)
 
 
 class TestDateRange:
@@ -139,6 +143,11 @@ class TestParseDateExpression:
         assert result.date_from == date(2024, 5, 20)
         assert result.date_to == date(2024, 5, 20)
 
+    def test_parse_invalid_specific_date(self) -> None:
+        """parse_date_expression returns None for invalid specific date (e.g., Feb 30)."""
+        result = parse_date_expression("2月30日", self.REFERENCE_DATE)
+        assert result is None
+
     def test_parse_invalid_expression_returns_none(self) -> None:
         """parse_date_expression returns None for unrecognized expressions."""
         result = parse_date_expression("invalid", self.REFERENCE_DATE)
@@ -210,3 +219,104 @@ class TestParseDateExpressionEdgeCases:
         assert result is not None
         assert result.date_from == date(2023, 12, 19)
         assert result.date_to == date(2024, 1, 17)
+
+
+class TestExtractDateFromQuery:
+    """Tests for extract_date_from_query function."""
+
+    REFERENCE_DATE = date(2024, 1, 17)
+
+    def test_extract_from_beginning_with_de(self) -> None:
+        """Extract date from beginning with '的' connector."""
+        # "上周的邮件" -> DateRange(last_week), "邮件"
+        date_range, remaining = extract_date_from_query("上周的邮件", self.REFERENCE_DATE)
+        assert date_range is not None
+        assert date_range.date_from == date(2024, 1, 8)
+        assert date_range.date_to == date(2024, 1, 14)
+        assert remaining == "邮件"
+
+    def test_extract_from_beginning_without_connector(self) -> None:
+        """Extract date from beginning without connector."""
+        # "昨天邮件" -> DateRange(yesterday), "邮件"
+        date_range, remaining = extract_date_from_query("昨天邮件", self.REFERENCE_DATE)
+        assert date_range is not None
+        assert date_range.date_from == date(2024, 1, 16)
+        assert date_range.date_to == date(2024, 1, 16)
+        assert remaining == "邮件"
+
+    def test_extract_yesterday_from_mixed_query(self) -> None:
+        """Extract '昨天' from mixed query."""
+        # "昨天收到的预算邮件"
+        date_range, remaining = extract_date_from_query("昨天收到的预算邮件", self.REFERENCE_DATE)
+        assert date_range is not None
+        assert date_range.date_from == date(2024, 1, 16)
+        assert remaining == "收到的预算邮件"
+
+    def test_extract_from_end(self) -> None:
+        """Extract date from end of query."""
+        # "邮件昨天" -> DateRange(yesterday), "邮件"
+        date_range, remaining = extract_date_from_query("邮件昨天", self.REFERENCE_DATE)
+        assert date_range is not None
+        assert date_range.date_from == date(2024, 1, 16)
+        assert remaining == "邮件"
+
+    def test_no_date_in_query(self) -> None:
+        """Return None when no date expression found."""
+        # "预算讨论" -> None, "预算讨论"
+        date_range, remaining = extract_date_from_query("预算讨论", self.REFERENCE_DATE)
+        assert date_range is None
+        assert remaining == "预算讨论"
+
+    def test_extract_with_multiple_de_connectors(self) -> None:
+        """Remove multiple '的' connectors after date."""
+        date_range, remaining = extract_date_from_query("上周的的邮件", self.REFERENCE_DATE)
+        assert date_range is not None
+        assert remaining == "邮件"
+
+    def test_extract_from_empty_string(self) -> None:
+        """Handle empty string input."""
+        date_range, remaining = extract_date_from_query("", self.REFERENCE_DATE)
+        assert date_range is None
+        assert remaining == ""
+
+    def test_extract_from_whitespace_only(self) -> None:
+        """Handle whitespace-only input."""
+        date_range, remaining = extract_date_from_query("   ", self.REFERENCE_DATE)
+        assert date_range is None
+        assert remaining == ""
+
+    def test_extract_specific_date_from_beginning(self) -> None:
+        """Extract specific date (N月N日) from beginning."""
+        date_range, remaining = extract_date_from_query("3月15日的会议", self.REFERENCE_DATE)
+        assert date_range is not None
+        assert date_range.date_from == date(2024, 3, 15)
+        assert remaining == "会议"
+
+    def test_extract_relative_days_from_beginning(self) -> None:
+        """Extract '最近N天' from beginning."""
+        date_range, remaining = extract_date_from_query("最近3天的邮件", self.REFERENCE_DATE)
+        assert date_range is not None
+        assert date_range.date_from == date(2024, 1, 15)
+        assert remaining == "邮件"
+
+    def test_extract_from_end_with_specific_date(self) -> None:
+        """Extract specific date from end of query."""
+        date_range, remaining = extract_date_from_query("会议3月15日", self.REFERENCE_DATE)
+        assert date_range is not None
+        assert date_range.date_from == date(2024, 3, 15)
+        assert remaining == "会议"
+
+    def test_extract_from_end_with_de_connector(self) -> None:
+        """Extract date from end with '的' connector before date."""
+        # "邮件的上周" -> DateRange(last_week), "邮件"
+        date_range, remaining = extract_date_from_query("邮件的上周", self.REFERENCE_DATE)
+        assert date_range is not None
+        assert date_range.date_from == date(2024, 1, 8)
+        assert remaining == "邮件"
+
+    def test_default_reference_date(self) -> None:
+        """extract_date_from_query uses today as default reference date."""
+        date_range, remaining = extract_date_from_query("今天的邮件")
+        assert date_range is not None
+        assert date_range.date_from == date.today()
+        assert remaining == "邮件"
