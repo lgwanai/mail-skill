@@ -37,7 +37,7 @@ exclude_lines = [
 ]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.10"
 warn_return_any = false  # Relaxed: allow Any returns
 warn_unused_configs = true
 disallow_untyped_defs = false  # Relaxed: gradual typing

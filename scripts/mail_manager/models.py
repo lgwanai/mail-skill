@@ -8,7 +8,7 @@ Uses from __future__ import annotations for Python 3.8 compatibility.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Any
 
 
 @dataclass
@@ -18,7 +18,7 @@ class Attachment:
     filename: str
     content_type: str
     size: int
-    local_path: Optional[str] = None
+    local_path: str | None = None
 
 
 @dataclass
@@ -35,17 +35,17 @@ class EmailData:
     account: str
 
     # Optional fields with defaults
-    imap_uid: Optional[str] = None
-    thread_id: Optional[str] = None
-    in_reply_to: Optional[str] = None
-    references: Optional[str] = None
-    cc: Optional[str] = None
-    html_body: Optional[str] = None
+    imap_uid: str | None = None
+    thread_id: str | None = None
+    in_reply_to: str | None = None
+    references: str | None = None
+    cc: str | None = None
+    html_body: str | None = None
     has_attachment: bool = False
     is_read: bool = False
     is_starred: bool = False
-    folder: str = 'INBOX'
-    attachments: List[Attachment] = field(default_factory=list)
+    folder: str = "INBOX"
+    attachments: list[Attachment] = field(default_factory=list)
 
 
 @dataclass
@@ -53,22 +53,22 @@ class CommandResult:
     """Standard response format for CLI commands."""
 
     status: str  # 'success' or 'error'
-    code: Optional[str] = None
-    message: Optional[str] = None
-    data: Optional[dict] = None
+    code: str | None = None
+    message: str | None = None
+    data: dict | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert to dictionary for JSON serialization.
 
         Returns:
             dict with status, and optionally code, message, and data
         """
-        result = {'status': self.status}
+        result: dict[str, Any] = {"status": self.status}
         if self.code:
-            result['code'] = self.code
+            result["code"] = self.code
         if self.message:
-            result['message'] = self.message
+            result["message"] = self.message
         if self.data:
-            result['data'] = self.data
+            result["data"] = self.data
         return result

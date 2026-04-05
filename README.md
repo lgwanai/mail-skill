@@ -1,101 +1,313 @@
 # Mail Skill 📧
 
-**Mail Skill** 是一个专门给 AI 智能体（比如 Trae、Claude Code 等）使用的“超级邮箱外挂”。
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Test Coverage](https://img.shields.io/badge/coverage-75%25-green.svg)]()
 
-你可以把它想象成一个**24小时在线、记忆力超群、且绝对保护你隐私的贴身数字秘书**。只要你动动嘴，它就能帮你把散落在各个邮箱里的信件收回来、整理好，还能帮你在一秒钟内翻出半年前的旧邮件，或者帮你用极具专业感的方式起草并发送回复。
-
----
-
-## 🎯 它可以帮你做什么？（使用场景）
-
-不要被复杂的技术名词吓到，来看看在日常生活中，你可以怎么差遣它：
-
-### 1. � “我的专属邮件晨报”
-> **你对 AI 说：** “帮我收一下昨晚的所有邮件，然后总结一下有没有什么紧急的事情？”
-> **它会怎么做：** 默默把所有新邮件拉到本地，然后自动帮你提炼出一份精美的 Markdown 报告。比如：“*老板发来了新需求需要今天确认*”、“*你有两个注册验证码*”、“*收到了三封推销广告（已忽略）*”。
-
-### 2. � “大海捞针式找邮件”
-> **你对 AI 说：** “我记得上个月有个叫王总的人，发过一份关于‘年度预算’的表格，帮我找出来，并把附件发给我。”
-> **它会怎么做：** 不需要在网页邮箱里痛苦地翻找！它会利用**混合语义检索技术**（就算你记不清标题，只记得大概意思），一秒钟从本地数据库里把那封邮件揪出来，并把包含发件人、正文摘要和附件地址的卡片直接贴在聊天窗口里。
-
-### 3. ✍️ “一句话让它帮你回邮件”
-> **你对 AI 说：** “给刚才那封会议邀请回个信，就说我周三上午10点有空，顺便把我桌面上这份 `会议大纲.pdf` 给他附上。”
-> **它会怎么做：** 它会像个成熟的职场人一样，自动带上历史聊天记录（保持邮件回复线索不断），帮你起草一段得体的回复，把文件打包成附件，并且**自动帮你把文字排版成非常漂亮、专业的 HTML 格式**发出去。
-
-### 4. 🗂️ “大扫除时间”
-> **你对 AI 说：** “帮我把最近所有标题里带‘退订’或者‘促销’的邮件，全部标记为已读，然后扔进‘垃圾箱’文件夹。”
-> **它会怎么做：** 自动筛选出这些烦人的邮件，并在服务器端同步完成这些操作，让你的收件箱瞬间清爽。
+**Mail Skill** 是一个专门为 AI 智能体（如 Claude Code、Trae 等）设计的强大邮件管理技能。它让 AI 能够像专业秘书一样帮你处理邮件——收发、搜索、分类、总结、回复，样样精通。
 
 ---
 
-## ✨ 为什么你需要它？
+## ✨ 核心功能
 
-- **🛡️ 绝对的隐私安全**：你的邮箱账号、密码、还有所有邮件的内容和附件，**全部只存在你自己的电脑上**。不需要把密码交给任何第三方云平台，不用担心数据泄露。
-- **� 告别卡顿和超时**：平时让 AI 直接去连邮箱服务器，经常因为网速慢而卡死。Mail Skill 会在本地建一个超快的“微型资料库”，AI 找邮件就像在本地搜文件一样快。
-- **🧠 记性特别好**：你可以告诉它“老板的邮箱是 boss@xxx.com”，它就会永远记住。你甚至可以给不同的邮箱设置不同的个性签名，它发邮件时绝不会串号。
-- **💼 发信排版特别好看**：只要你提供简单的文字，它发出去的邮件自带**高级科技风排版**（漂亮的表格、清晰的层级），让收件人觉得你极其专业。
-- **🛡️ 防错发保险机制**：在帮你发邮件或回复之前，Agent **必须先给你展示完整的邮件草稿**，只有你点头说“发送”，它才会真正发出去，绝不会发生乱发邮件的惨剧。
+### 📬 邮件收发
+- **多账户支持**：同时管理多个邮箱账户，数据隔离存储
+- **异步收取**：后台批量拉取邮件，支持指定文件夹、时间范围、已读状态过滤
+- **专业发信**：Markdown 自动转精美 HTML，支持附件、抄送、密送
+- **智能回复**：自动带上原始邮件历史，支持回复全部
 
----
+### 🔍 智能搜索
+- **全文搜索**：基于 SQLite FTS5 的快速关键词搜索
+- **语义搜索**：基于 OpenAI Embeddings + ChromaDB 的向量相似度搜索
+- **混合搜索**：FTS + 向量 + Cross-Encoder 重排序，搜索更精准
+- **自然语言搜索**：支持中文日期表达式，如"上周老板发的关于预算的邮件"
 
-## 📦 新手安装指南
+### 🤖 AI 增强功能
+- **邮件分类**：自动识别重要程度（critical/high/normal/low）和类别（work/personal/notification/promo）
+- **AI 回复**：基于原始邮件和上下文线程生成专业回复，支持用户意图指导
+- **邮件总结**：按发件人分组生成摘要报告，快速掌握邮件概况
+- **附件解析**：支持 PDF、Excel、PPT、图片（OCR）等内容提取
 
-安装过程非常简单，只需要两分钟：
+### 🏷️ 邮件管理
+- **标签系统**：添加/删除标签，支持批量操作
+- **批量标记**：批量设置已读/星标状态
+- **邮件移动**：在文件夹间移动邮件
+- **邮件删除**：本地和服务器同步删除
 
-### 1. 环境准备
-确保你的电脑上安装了 Python 3.8 或以上版本。
-
-### 2. 下载并安装
-1. 将打包好的压缩包（例如 `mail-skill.zip`）解压到你喜欢的文件夹里。
-2. 打开终端（命令行），进入这个文件夹，运行下面的命令安装需要的运行库：
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-### 3. 配置你的邮箱（关键一步）
-由于 Agent 环境通常无法直接看到隐藏文件，你可以直接让 AI 帮你完成配置。
-
-1. **准备好你的配置信息**：复制下面的模板到任意编辑器（比如记事本），填好你自己的邮箱和授权码。
-   > **⚠️ 注意**：现在的大多数邮箱（比如 QQ、网易、Gmail），为了安全，都不允许直接用登录密码了。你需要去网页版邮箱的“设置”里，找到并开启 **IMAP/SMTP 服务**，然后生成一个**“应用专用密码”（或叫授权码）**填在这里。
-
-   ```env
-   # Mail Skill Configuration
-   
-   # --- 必填：你的邮箱信息 ---
-   MAIL_ACCOUNT_1_EMAIL=你的邮箱@qq.com
-   MAIL_ACCOUNT_1_PASSWORD=你的应用授权码
-   MAIL_ACCOUNT_1_IMAP_SERVER=imap.qq.com
-   MAIL_ACCOUNT_1_IMAP_PORT=993
-   MAIL_ACCOUNT_1_SMTP_SERVER=smtp.qq.com
-   MAIL_ACCOUNT_1_SMTP_PORT=465
-   MAIL_ACCOUNT_1_USE_SSL=true
-   
-   # --- 选填：如果你想开启强大的“混合语义检索”，请配置大模型 API ---
-   # OPENAI_API_KEY=your_api_key
-   # OPENAI_API_BASE=https://api.openai.com/v1
-   # EMBEDDING_MODEL_NAME=text-embedding-3-small
-   
-   # --- 系统默认配置（建议保留） ---
-   MAIL_STORAGE_ROOT=./mail_data
-   MAIL_ATTACHMENT_PATH=./mail_data/attachments
-   MAIL_DB_PATH=./mail_data/mail_index.db
-   ```
-
-2. **交给 AI 自动配置**：把修改好的配置内容复制，粘贴给正在使用的 AI 助手（如 OpenClaw 或 Claude Code），并告诉它：
-   > “请帮我在 Mail Skill 的根目录下创建或更新 `config.txt` 文件，内容如下：[粘贴你的配置]”
-
-### 4. 开始使用！
-配置完成后，AI 就会自动阅读技能说明。接下来，你就可以像聊天一样使唤它处理邮件了！比如对它说：“帮我收一下今天的邮件并总结一下。”
+### 🎨 用户体验
+- **Web 配置界面**：通过浏览器轻松配置账户和设置
+- **精美输出**：邮件详情以 Markdown 格式呈现，阅读体验极佳
+- **附件预览**：本地 HTTP 服务器提供附件在线预览
+- **签名档**：每个账户可配置独立签名
 
 ---
 
-## 💡 常见问题答疑 (FAQ)
+## 📦 安装
 
-**Q: 为什么我让它收邮件，它说报错或者连接超时？**
-> A: 99% 的情况是因为配置没写对。请检查 `config.txt` 文件：是不是填错了服务器地址？是不是把登录密码当成了授权码？或者去网页端看看你的 IMAP 服务到底有没有开启。
+### 环境要求
+- Python 3.8 或以上
+- 支持 IMAP/SMTP 的邮箱账户
+- OpenAI API Key（用于 AI 功能，可选）
 
-**Q: 我的邮件很多，本地存得下吗？**
-> A: 邮件默认都会保存在文件夹里的 `mail_data` 目录。普通的邮件文字非常小，主要占空间的是附件。如果觉得占地方了，你可以随时手动删掉这个 `mail_data` 文件夹，不会影响你邮箱服务器里的任何东西。
+### 快速安装
 
-**Q: 邮件里带了各种发票和 Word 文档，AI 能看懂吗？**
-> A: Mail Skill 会把附件乖乖下载到本地。如果你的 AI 助手（Agent）本身就具备读取 PDF 或 Word 文件的能力，它就可以顺着路径直接帮你打开并阅读这些附件里的内容！
+```bash
+# 1. 克隆或下载项目
+git clone <repository-url>
+cd mail-skill
+
+# 2. 安装依赖
+pip install -r requirements.txt
+
+# 3. 启动配置服务
+python scripts/mail_cli.py config
+```
+
+打开浏览器访问显示的 URL（如 `http://127.0.0.1:8100`），完成以下配置：
+
+1. **AI 设置**：填写 OpenAI API Key（用于语义搜索、AI 回复等功能）
+2. **邮箱账户**：添加你的邮箱账户信息
+
+> **提示**：大多数邮箱（QQ、Gmail、网易等）需要使用**应用专用密码**而非登录密码。请在邮箱设置中开启 IMAP/SMTP 服务并生成授权码。
+
+---
+
+## 🚀 使用指南
+
+### 基础命令
+
+```bash
+# 收取邮件（默认最近 7 天）
+python scripts/mail_cli.py fetch
+
+# 搜索邮件
+python scripts/mail_cli.py search --query "项目报告"
+
+# 语义搜索（理解含义，不只是关键词）
+python scripts/mail_cli.py search --query "下周会议安排" --vector
+
+# 自然语言搜索
+python scripts/mail_cli.py smart-search "上周老板发的关于预算的邮件"
+
+# 阅读邮件
+python scripts/mail_cli.py read <message_id>
+
+# 发送邮件
+python scripts/mail_cli.py send --to recipient@example.com --subject "主题" --body "正文"
+
+# 回复邮件
+python scripts/mail_cli.py reply <message_id> --body "回复内容"
+```
+
+### AI 功能
+
+```bash
+# 邮件分类
+python scripts/mail_cli.py classify <message_id>
+
+# AI 生成回复（预览模式）
+python scripts/mail_cli.py ai-reply <message_id> --dry-run
+
+# 生成邮件摘要报告
+python scripts/mail_cli.py summary-report --days 7
+
+# 解析附件内容
+python scripts/mail_cli.py parse-attachments --message-id <message_id>
+```
+
+### 管理命令
+
+```bash
+# 标签管理
+python scripts/mail_cli.py tag add <message_id> "重要"
+python scripts/mail_cli.py tag batch-add "待处理" --from-search "from:boss"
+
+# 批量标记
+python scripts/mail_cli.py batch-mark --from-search "newsletter" --read 1
+
+# 查看邮件线程
+python scripts/mail_cli.py thread <message_id>
+
+# 重建搜索索引
+python scripts/mail_cli.py rebuild-index
+```
+
+---
+
+## 📁 项目结构
+
+```
+mail-skill/
+├── scripts/
+│   ├── mail_cli.py              # 主 CLI 入口
+│   └── mail_manager/
+│       ├── client.py            # IMAP/SMTP 客户端
+│       ├── db.py                # 数据库操作（SQLite + ChromaDB）
+│       ├── config_server.py     # Web 配置服务
+│       ├── config_manager.py    # 配置管理
+│       ├── config_db.py         # 配置数据库
+│       ├── classifier.py        # 邮件分类器
+│       ├── query_parser.py      # 自然语言查询解析
+│       ├── date_parser.py       # 中文日期解析
+│       ├── detail.py            # 邮件详情格式化
+│       ├── templates.py         # 邮件模板
+│       ├── thread_manager.py    # 邮件线程管理
+│       ├── summary_report.py    # 邮件摘要报告
+│       ├── reply_assistant.py   # AI 回复助手
+│       ├── server.py            # 附件预览服务器
+│       ├── errors.py            # 错误码定义
+│       ├── llm/                 # LLM 客户端
+│       │   ├── client.py
+│       │   └── prompts.py
+│       └── attachment_parser/   # 附件解析器
+│           ├── pdf_parser.py
+│           ├── excel_parser.py
+│           ├── pptx_parser.py
+│           ├── image_parser.py
+│           └── text_parser.py
+├── tests/                       # 测试文件
+├── mail_data/                   # 数据目录（运行时生成）
+│   ├── config.db                # 配置数据库
+│   └── <account>/               # 按账户隔离存储
+│       ├── mail_index.db        # 邮件索引
+│       ├── eml/                 # 原始邮件
+│       ├── attachments/         # 附件
+│       └── signature.md         # 签名档
+├── SKILL.md                     # Agent 技能说明
+├── README.md                    # 本文件
+└── requirements.txt             # 依赖列表
+```
+
+---
+
+## 🗓️ 更新日志
+
+### v2.0.0 (2024-04)
+
+#### 新功能
+
+**Web 配置界面**
+- 新增 `config` 命令，通过浏览器进行可视化配置
+- 支持 AI 设置、存储设置、邮箱账户的 Web 管理界面
+- 配置数据存储在 SQLite 数据库中，更安全可靠
+
+**自然语言搜索**
+- 支持"上周"、"本月"、"昨天"等中文日期表达式
+- 自动提取搜索意图中的发件人、时间范围、关键词
+- 与发件人列表进行模糊匹配，提高搜索准确度
+
+**邮件分类系统**
+- 自动识别邮件重要程度：critical / high / normal / low
+- 自动识别邮件类别：work / personal / notification / promo
+- 支持基于规则引擎的分类（可配置 YAML 规则）
+- 支持手动重新分类
+
+**AI 回复助手**
+- 基于原始邮件内容生成专业回复
+- 支持包含邮件线程上下文
+- 支持"用户意图"指导（如"礼貌拒绝"、"确认参加"）
+- 回复反馈学习机制，越用越准
+
+**邮件摘要报告**
+- 按发件人分组生成 Markdown 格式摘要报告
+- 支持自定义日期范围
+- LLM 生成每组的简要总结
+- 支持输出到文件
+
+**附件内容解析**
+- 支持 PDF 文档文本提取
+- 支持 Excel 表格内容读取
+- 支持 PPT 演示文稿内容提取
+- 支持图片 OCR（通过视觉模型）
+- 解析内容存入数据库，支持搜索
+
+**邮件线程管理**
+- 增强的线程时间线显示
+- 基于发件人/收件人匹配的线程关联
+- 支持生成线程摘要
+
+**批量操作**
+- 批量标记已读/星标
+- 批量添加标签
+- 支持从搜索结果批量操作
+
+**其他改进**
+- 邮件详情 Markdown 格式化，阅读体验更好
+- 邮件模板系统，支持自定义模板
+- 统一的错误码和响应格式
+- 完整的类型注解
+
+#### 技术改进
+
+- 测试覆盖率达到 75%
+- 模块化架构，易于扩展
+- 完善的错误处理机制
+
+---
+
+## 🔧 配置参考
+
+### 邮箱账户配置
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| EMAIL | 邮箱地址 | user@qq.com |
+| PASSWORD | 应用授权码 | xxxxxxxx |
+| IMAP_SERVER | IMAP 服务器 | imap.qq.com |
+| IMAP_PORT | IMAP 端口 | 993 |
+| SMTP_SERVER | SMTP 服务器 | smtp.qq.com |
+| SMTP_PORT | SMTP 端口 | 465 |
+| USE_SSL | 是否使用 SSL | true |
+
+### AI 配置
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| OPENAI_API_KEY | OpenAI API 密钥 | - |
+| OPENAI_API_BASE | API 基础 URL | https://api.openai.com/v1 |
+| LLM_MODEL_NAME | 语言模型 | gpt-4o-mini |
+| EMBEDDING_MODEL_NAME | 向量模型 | text-embedding-3-small |
+| RERANKER_MODEL_NAME | 重排序模型 | BAAI/bge-reranker-base |
+
+### 常见邮箱服务器配置
+
+| 邮箱 | IMAP 服务器 | SMTP 服务器 |
+|------|-------------|-------------|
+| QQ 邮箱 | imap.qq.com:993 | smtp.qq.com:465 |
+| Gmail | imap.gmail.com:993 | smtp.gmail.com:465 |
+| 网易 163 | imap.163.com:993 | smtp.163.com:465 |
+| Outlook | outlook.office365.com:993 | smtp.office365.com:587 |
+
+---
+
+## ❓ 常见问题
+
+**Q: 连接邮箱失败怎么办？**
+> 检查以下几点：
+> 1. 确认 IMAP/SMTP 服务已开启
+> 2. 使用**应用专用密码**而非登录密码
+> 3. 检查服务器地址和端口是否正确
+> 4. 检查网络是否需要代理
+
+**Q: 搜索结果为空？**
+> 运行 `python scripts/mail_cli.py rebuild-index` 重建搜索索引。
+
+**Q: AI 功能报错？**
+> 确认已配置有效的 OpenAI API Key。可以通过 `config` 命令检查配置。
+
+**Q: 附件预览打不开？**
+> 附件预览服务会在首次访问时自动启动。检查 `./mail_data/<account>/` 目录下是否有附件文件。
+
+**Q: 数据存储在哪里？**
+> 所有数据存储在 `./mail_data/` 目录下，按账户隔离。删除此目录不影响邮箱服务器上的原始数据。
+
+---
+
+## 📄 许可证
+
+MIT License
+
+---
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！

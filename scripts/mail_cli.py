@@ -24,6 +24,8 @@ from jinja2 import Environment, FileSystemLoader
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mail_manager.client import MailClient
+from mail_manager.config_manager import ConfigManager, get_config_manager
+from mail_manager.config_server import ConfigServer, ensure_config_server, get_config_url
 from mail_manager.db import MailDatabase
 from mail_manager.detail import format_email_detail
 from mail_manager.errors import ErrorCodes, error_response, success_response
@@ -76,41 +78,30 @@ def get_cached_senders(db: MailDatabase, account: str) -> list[str]:
     return senders
 
 
+# Global config manager instance
+_config_manager: ConfigManager | None = None
+
+
 def load_config() -> dict[str, Any]:
-    """Load configuration from config.txt file."""
-    # Look for config.txt in the parent directory of scripts
-    env_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.txt"
-    )
-    if os.path.exists(env_path):
-        load_dotenv(env_path)
-    else:
-        load_dotenv("config.txt")  # Try current directory
+    """Load configuration from database or config.txt file.
 
-    config: dict[str, Any] = {
-        "STORAGE_ROOT": os.getenv("MAIL_STORAGE_ROOT", "./mail_data"),
-        "DB_PATH": os.getenv("MAIL_DB_PATH", "./mail_data/mail_index.db"),
-        "ATTACHMENT_PATH": os.getenv("MAIL_ATTACHMENT_PATH", "./mail_data/attachments"),
-        "ACCOUNTS": {},
-    }
+    Uses the new ConfigManager which:
+    1. Reads from SQLite config database
+    2. Falls back to config.txt environment variables
+    3. Auto-imports existing config.txt on first run
+    """
+    global _config_manager
+    if _config_manager is None:
+        _config_manager = get_config_manager()
+    return _config_manager.load_config()
 
-    # Parse accounts
-    for key, value in os.environ.items():
-        if key.startswith("MAIL_ACCOUNT_") and key.endswith("_EMAIL"):
-            account_prefix = key[:-6]  # Remove _EMAIL
 
-            config["ACCOUNTS"][value] = {
-                "EMAIL": value,
-                "PASSWORD": os.getenv(f"{account_prefix}_PASSWORD"),
-                "IMAP_SERVER": os.getenv(f"{account_prefix}_IMAP_SERVER"),
-                "IMAP_PORT": os.getenv(f"{account_prefix}_IMAP_PORT", "993"),
-                "SMTP_SERVER": os.getenv(f"{account_prefix}_SMTP_SERVER"),
-                "SMTP_PORT": os.getenv(f"{account_prefix}_SMTP_PORT", "465"),
-                "USE_SSL": os.getenv(f"{account_prefix}_USE_SSL", "true"),
-                "PREFIX": account_prefix,
-            }
-
-    return config
+def get_cli_config_manager() -> ConfigManager:
+    """Get the global ConfigManager instance."""
+    global _config_manager
+    if _config_manager is None:
+        _config_manager = get_config_manager()
+    return _config_manager
 
 
 def get_client(config: dict[str, Any], email_account: str | None = None) -> MailClient:
@@ -2001,6 +1992,98 @@ def cmd_summary_report(args: Any, config: dict[str, Any], db: MailDatabase) -> N
         print(json.dumps(error_response(ErrorCodes.SERVER_DATABASE_ERROR, str(e))))
 
 
+def cmd_config(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Manage configuration via web UI.
+
+    Args:
+        args: CLI arguments with config_command.
+        config: Configuration dictionary.
+        db: MailDatabase instance.
+    """
+    config_command = getattr(args, "config_command", None)
+
+    if config_command == "start":
+        # Start config server
+        port = getattr(args, "port", None)
+        if port:
+            server = ConfigServer(port_range=(port, port))
+        else:
+            server = ConfigServer()
+
+        try:
+            port = server.start()
+            print(
+                json.dumps(
+                    success_response(
+                        data={"port": port, "url": f"http://127.0.0.1:{port}"},
+                        message=f"Config server started. Open http://127.0.0.1:{port} in your browser.",
+                    )
+                )
+            )
+            # Keep the server running (this blocks)
+            print("Press Ctrl+C to stop the server...")
+            server.thread.join()
+        except KeyboardInterrupt:
+            server.stop()
+            print(json.dumps(success_response(message="Config server stopped")))
+        except Exception as e:
+            print(json.dumps(error_response(ErrorCodes.INTERNAL_ERROR, str(e))))
+
+    elif config_command == "url":
+        # Show config server URL
+        try:
+            url = get_config_url()
+            print(
+                json.dumps(
+                    success_response(
+                        data={"url": url},
+                        message=f"Config server is running at {url}",
+                    )
+                )
+            )
+        except Exception as e:
+            print(json.dumps(error_response(ErrorCodes.INTERNAL_ERROR, str(e))))
+
+    elif config_command == "stop":
+        # Stop config server
+        existing = ConfigServer.get_running_server()
+        if existing:
+            existing.stop()
+            print(json.dumps(success_response(message="Config server stopped")))
+        else:
+            print(json.dumps(success_response(message="No config server running")))
+
+    else:
+        # No subcommand - show URL or start server
+        manager = get_config_manager()
+        if not manager.is_configured():
+            # Not configured - start server and show URL
+            url = get_config_url()
+            print(
+                json.dumps(
+                    success_response(
+                        data={"url": url},
+                        message=f"Configuration required. Open {url} in your browser to configure.",
+                    )
+                )
+            )
+        else:
+            # Already configured - show URL
+            existing = ConfigServer.get_running_server()
+            if existing and existing.port:
+                url = f"http://127.0.0.1:{existing.port}"
+            else:
+                url = get_config_url()
+            print(
+                json.dumps(
+                    success_response(
+                        data={"url": url},
+                        message=f"Config server running at {url}",
+                    )
+                )
+            )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Mail Manager CLI")
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
@@ -2230,6 +2313,20 @@ def main():
     summary_p.add_argument("--limit", type=int, default=100, help="Max emails to process")
     summary_p.add_argument("--output", help="Output file path")
 
+    # config
+    config_p = subparsers.add_parser("config", help="Manage configuration via web UI")
+    config_subparsers = config_p.add_subparsers(dest="config_command", help="Config subcommand")
+
+    # config start
+    config_start = config_subparsers.add_parser("start", help="Start config web server")
+    config_start.add_argument("--port", type=int, help="Specific port to use (default: auto-select)")
+
+    # config url
+    config_url = config_subparsers.add_parser("url", help="Show config server URL")
+
+    # config stop
+    config_stop = config_subparsers.add_parser("stop", help="Stop config web server")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -2285,6 +2382,8 @@ def main():
         cmd_ai_reply(args, config, db)
     elif args.command == "summary-report":
         cmd_summary_report(args, config, db)
+    elif args.command == "config":
+        cmd_config(args, config, db)
 
 
 if __name__ == "__main__":

@@ -1,125 +1,446 @@
 ---
 name: mail-skill
-description: Comprehensive email management skill. Use this skill when the user wants to fetch, search, read, send, reply to, move, delete, mark, or summarize emails. It supports multiple accounts (IMAP/SMTP), manages emails via a local SQLite index to avoid duplicate fetching, and manages account-specific email signatures (set/save signatures).
+description: >
+  Comprehensive email management skill for AI agents. Fetches, searches, reads,
+  sends, and summarizes emails via IMAP/SMTP. Features include semantic search
+  with vector embeddings, AI-powered replies, email classification, thread
+  tracking, and attachment preview. Supports multiple accounts with isolated
+  storage. Triggers: "check my email", "search emails", "send email", "reply to",
+  "email summary", "fetch emails", "mail from", "inbox".
 ---
 
-# Mail Management Skill
+# Mail Skill
 
-This skill provides a robust command-line interface (`scripts/mail_cli.py`) for managing emails across multiple accounts.
+A powerful email management skill that acts as your personal email assistant.
 
-## Core Capabilities
-- **Fetch**: Retrieve emails via IMAP and save them locally (.eml, .json, and SQLite index). Skips already downloaded emails based on `message_id`. Extracts `In-Reply-To` and `References` for thread building.
-- **Search (FTS5)**: Query the local database using SQLite FTS5 for fast full-text retrieval based on sender, subject, and body content.
-- **Read**: View the full content of an email, rendered via Jinja2 into a clean vertical Markdown card, including its text and attachment metadata.
-- **Thread Timeline**: Use the `thread` command to build and display a full conversation timeline (A→B→C→D) based on email references, rendered vertically for easy chat-interface reading.
-- **Send/Reply/Forward**: Send new emails or reply/forward existing ones via SMTP.
-- **Manage**: Mark as read/starred, move between folders, or delete emails.
-- **Summarize**: Since the skill provides full email text, you (Claude/Trae) can use your own intelligence to summarize the content, extract to-dos, or identify key dates.
-- **Set Signature**: Manage and store the user's email signature persistently per account in `mail_data/<email>/signature.md`. The CLI will automatically append it to outgoing emails.
+## When to Activate
 
-## Workflow
+- User asks to check, fetch, or read emails
+- User wants to search emails (keyword or natural language)
+- User needs to send, reply to, or forward emails
+- User requests email summaries or reports
+- User mentions email threads or conversations
+- User asks about attachments in emails
+- User wants to organize or classify emails
 
-### 1. Initial Setup
-The user must provide an `.env` file in the root directory (or use `example.env` as a template). Ensure `python-dotenv`, `imap-tools`, `beautifulsoup4` are installed (`pip install -r requirements.txt`).
-
-### 2. Fetching Emails
-Fetching emails is an asynchronous process because it can take time. When you run the `fetch` command, it will return a `task_id` immediately.
+## Quick Start
 
 ```bash
-./scripts/mail_cli.py fetch --limit 50 --days 7
-```
-*Note: By default, it only fetches from `INBOX`. If you need to fetch from all folders (e.g., if the user has server-side routing rules), use `--folder ALL`. You can also specify multiple folders like `--folder "INBOX,Sent"`. The `--limit` applies per folder. If you need to fetch more than 100 emails per folder, you MUST append the `--confirm` flag, and you should ask the user for confirmation first.*
+# Configure via web UI (first time)
+python scripts/mail_cli.py config
 
-Check the status of the fetch task using the returned `task_id`:
+# Fetch latest emails
+python scripts/mail_cli.py fetch --days 7
+
+# Search emails
+python scripts/mail_cli.py search --query "project update"
+
+# Send an email
+python scripts/mail_cli.py send --to recipient@example.com --subject "Hello" --body "Message content"
+```
+
+## Core Commands
+
+### Fetch Emails
+
 ```bash
-./scripts/mail_cli.py fetch-status "<task_id>"
+# Fetch recent emails (default: last 7 days, max 50)
+python scripts/mail_cli.py fetch
+
+# Fetch from specific folder
+python scripts/mail_cli.py fetch --folder INBOX
+
+# Fetch from all folders
+python scripts/mail_cli.py fetch --folder ALL
+
+# Fetch more emails (requires confirmation)
+python scripts/mail_cli.py fetch --limit 200 --confirm
+
+# Fetch only unread
+python scripts/mail_cli.py fetch --unread
+
+# Check fetch task status (async)
+python scripts/mail_cli.py fetch-status <task_id>
 ```
-Wait a few seconds and poll the status until it returns `"status": "completed"`. Once completed, **you MUST immediately use the `summarize` command to generate a professional report for the user**, passing the `task_id` so it only summarizes the newly fetched emails:
+
+**Output**: JSON with `task_id` for async tracking. Emails are stored in `./mail_data/<account>/`.
+
+### Search Emails
 
 ```bash
-./scripts/mail_cli.py summarize --task-id "<task_id>"
+# Full-text search
+python scripts/mail_cli.py search --query "budget report"
+
+# Semantic search (vector embeddings)
+python scripts/mail_cli.py search --query "project timeline" --vector
+
+# Hybrid search (FTS + Vector with reranking)
+python scripts/mail_cli.py search --query "meeting notes" --hybrid
+
+# Filter by attributes
+python scripts/mail_cli.py search --sender "boss@company.com" --folder INBOX --is-read 0
+
+# Filter by classification
+python scripts/mail_cli.py search --importance high --category work
+
+# Filter by tag
+python scripts/mail_cli.py search --tag "follow-up"
 ```
 
-### 3. Summarizing Emails
-Generate a professional, categorized Markdown report of emails (overall stats, verification codes, important emails, action required, and others):
+**Output**: JSON with `count` and `results` array containing `message_id`, `subject`, `sender`, `date`, `snippet`.
+
+### Natural Language Search
+
 ```bash
-./scripts/mail_cli.py summarize --task-id "<task_id>"
+# Smart search understands natural language
+python scripts/mail_cli.py smart-search "emails from John last week about budget"
+python scripts/mail_cli.py smart-search "unread emails from boss yesterday"
+python scripts/mail_cli.py smart-search "emails about project deadline this month"
 ```
-If you just want to summarize recent emails without a specific task:
+
+**Output**: JSON with `parsed_query` (extracted date range, sender, keywords) and `results`.
+
+### Read Email
+
 ```bash
-./scripts/mail_cli.py summarize --limit 20
+# Read full email with enhanced Markdown formatting
+python scripts/mail_cli.py read <message_id>
+
+# Brief table view
+python scripts/mail_cli.py read <message_id> --brief
 ```
 
-### 4. Searching Emails
-Search locally first. This is much faster and doesn't hit the server:
+**Output**: Markdown-formatted email with sender, recipients, date, subject, body, attachments, and thread context.
+
+### Send Email
+
 ```bash
-./scripts/mail_cli.py search --query "meeting" --limit 10
-./scripts/mail_cli.py search --sender "boss@company.com" --is-read 0
+# Basic send
+python scripts/mail_cli.py send --to recipient@example.com --subject "Subject" --body "Body text"
+
+# With CC/BCC
+python scripts/mail_cli.py send --to main@example.com --cc other@example.com --subject "Subject" --body "Body"
+
+# With attachments
+python scripts/mail_cli.py send --to recipient@example.com --subject "Report" --body "See attached" --attach ./report.pdf
+
+# Zip folders as attachment
+python scripts/mail_cli.py send --to recipient@example.com --subject "Files" --body "Here" --attach ./folder --zip-as "files.zip"
 ```
-**Important Search Flags**:
-- **Semantic / Fuzzy Search**: If the user is asking to find emails by fuzzy concepts, ideas, or vague descriptions (e.g., "find the email about the project launch last week"), you MUST use the `--hybrid` flag. This combines keyword search with vector semantic search and reranks the results for high accuracy.
+
+**Note**: Body text supports Markdown and is automatically converted to styled HTML.
+
+### Reply to Email
+
 ```bash
-./scripts/mail_cli.py search --query "project launch" --hybrid --limit 5
+# Reply to sender
+python scripts/mail_cli.py reply <message_id> --body "Reply content"
+
+# Reply to all (sender + CC)
+python scripts/mail_cli.py reply <message_id> --body "Reply to all" --all
+
+# With attachments
+python scripts/mail_cli.py reply <message_id> --body "See attached" --attach ./file.pdf
 ```
-- **Rebuilding Index**: If the user mentions that search is empty but emails exist (e.g., they fetched emails before the search features were added), run the `rebuild-index` command to sync all old emails into the FTS5 and Vector databases:
+
+**Note**: Original email history is appended automatically. Signature is added if `signature.md` exists.
+
+### Thread View
+
 ```bash
-./scripts/mail_cli.py rebuild-index --account "<email_account>"
+# Show email thread timeline
+python scripts/mail_cli.py thread <message_id>
+
+# With LLM-generated summary
+python scripts/mail_cli.py thread <message_id> --summary
 ```
 
-### 5. Reading an Email
-To read the full text and get attachment info, use the `message_id` from the search results. The output is formatted as a vertical Markdown table for easy reading in chat interfaces:
+**Output**: Timeline of related emails with sender/recipient matching.
+
+### Email Summarization
+
 ```bash
-./scripts/mail_cli.py read "<message_id>" --account "<email_account>"
+# Summarize recent emails (categorized)
+python scripts/mail_cli.py summarize --limit 10
+
+# Summarize emails from a fetch task
+python scripts/mail_cli.py summarize --task-id <task_id>
 ```
 
-### 6. Viewing an Email Thread
-To view the full context of a conversation (A→B→C→D) based on a specific email, use the `thread` command. It traces `In-Reply-To` and `References` headers and outputs a chronological vertical table:
+**Output**: Markdown report with categories:
+- Verification codes (extracted codes highlighted)
+- Important emails (priority keywords detected)
+- Action required (reply/follow-up needed)
+- Other regular emails
+
+### Summary Report by Sender
+
 ```bash
-./scripts/mail_cli.py thread "<message_id>" --account "<email_account>"
+# Generate report grouped by sender (last 7 days)
+python scripts/mail_cli.py summary-report
+
+# Custom date range
+python scripts/mail_cli.py summary-report --date-from 2024-01-01 --date-to 2024-01-31
+
+# Save to file
+python scripts/mail_cli.py summary-report --output report.md
 ```
 
-### 7. Sending Emails
+**Output**: Markdown report with sender-grouped emails and LLM-generated summaries.
+
+## Email Management
+
+### Mark as Read/Starred
+
 ```bash
-./scripts/mail_cli.py send --to "recipient@example.com" --subject "Hello" --body "Message body" --attach "path/to/file1.txt" "path/to/folder1"
-```
-**🚨 CRITICAL SENDING RULE**: Before you execute the `send` or `reply` command, you MUST present the complete draft of the email (including recipients, subject, and the exact body text) to the user and ask for their explicit confirmation. Do not send the email until the user says "Yes", "Looks good", "Send it", etc.
+# Mark as read
+python scripts/mail_cli.py mark <message_id> --read 1
 
-To send an HTML email, provide the `--html-body` parameter:
+# Mark as unread
+python scripts/mail_cli.py mark <message_id> --read 0
+
+# Star/unstar
+python scripts/mail_cli.py mark <message_id> --starred 1
+
+# Batch mark
+python scripts/mail_cli.py batch-mark --from-search "newsletter" --read 1
+```
+
+### Tags (Labels)
+
 ```bash
-./scripts/mail_cli.py send --to "recipient@example.com" --subject "Hello" --body "Plain text fallback" --html-body "<h1>Hello</h1><p>Message body</p>"
+# Add tag
+python scripts/mail_cli.py tag add <message_id> "follow-up"
+
+# Remove tag
+python scripts/mail_cli.py tag remove <message_id> "follow-up"
+
+# List tags
+python scripts/mail_cli.py tag list <message_id>
+
+# Batch add tags
+python scripts/mail_cli.py tag batch-add "important" --from-search "from:boss"
 ```
-To pack multiple files and/or folders into a single zip file before sending, use `--zip-as`:
+
+### Classification
+
 ```bash
-./scripts/mail_cli.py send --to "recipient@example.com" --subject "Docs" --body "Here are the files" --attach "file1.txt" "folder2" --zip-as "project_docs.zip"
+# Classify single email
+python scripts/mail_cli.py classify <message_id>
+
+# Auto-classify all unclassified
+python scripts/mail_cli.py classify --limit 100
+
+# Manual reclassify
+python scripts/mail_cli.py reclassify <message_id> --importance high --category work
 ```
 
-### 8. Managing Emails
-- **Mark**: `./scripts/mail_cli.py mark "<message_id>" --read 1 --starred 1 --account "<email_account>"`
-- **Move**: `./scripts/mail_cli.py move "<message_id>" "Archive" --account "<email_account>"`
-- **Delete**: `./scripts/mail_cli.py delete "<message_id>" --account "<email_account>"`
+**Categories**: `work`, `personal`, `notification`, `promo`, `uncategorized`
+**Importance**: `critical`, `high`, `normal`, `low`
 
-### 9. Exporting
-Export local database for analysis:
+### Move/Delete
+
 ```bash
-./scripts/mail_cli.py export --format csv --output emails.csv --account "<email_account>"
+# Move to folder
+python scripts/mail_cli.py move <message_id> Archive
+
+# Delete email
+python scripts/mail_cli.py delete <message_id>
 ```
 
-### 10. Managing Email Signatures
-When the user asks you to "set my email signature", "save this signature", or "use this as my signature":
-1. First, determine which account they are referring to. If they don't specify, ask them or check `.env` / `references/MEMORY.md` for the default account.
-2. The signature file for an account MUST be stored at `mail_data/<safe_email_address>/signature.md` (where `<safe_email_address>` replaces `@` with `_at_`, `.` with `_`, and removes any other special characters except `-` and `_`). For example, `test@example.com` becomes `test_at_example_com`.
-3. Open and edit this specific `mail_data/<safe_email_address>/signature.md` file using your file writing/editing tools. If the directory doesn't exist, create it.
-4. Save the exact signature content into the file.
-5. Confirm to the user that their signature has been saved for that specific account and will be automatically used by the CLI in future emails.
+## Attachments
 
+### List Attachments
 
+```bash
+# List attachments with preview URLs
+python scripts/mail_cli.py attachments --limit 50
+```
 
-## Best Practices
-- **Always Search Local First**: Do not fetch unless the user explicitly asks to "check for new emails" or if a local search yields no results.
-- **Mandatory Send Confirmation**: Never assume a drafted email is perfect. Always show the draft and wait for user confirmation before executing `./scripts/mail_cli.py send` or `reply`.
-- **Handling Replies**: Use the `reply` command. It automatically handles the `In-Reply-To` headers, sets the `To` / `Cc` addresses correctly, and prepends `Re:` to the subject. Use `--all` to reply to all original senders and CCs. Example: `./scripts/mail_cli.py reply "<message_id>" --body "My reply" --all`
-- **Smart Summarization**: Use the `summarize` command for quick professional reports. For deeper analysis of a single thread, use `read` and analyze the content directly.
-- **Persistent Memory (CRITICAL)**: 
-  - ALWAYS read `references/MEMORY.md` to get user's important contacts (like boss's email) and preferences at the start of your task.
-  - DO NOT manually append signatures to the `--body` argument when calling `send` or `reply`. The CLI will automatically read the account's `signature.md` and append it for you.
-  - Whenever the user tells you to remember a new contact or preference, you MUST edit `references/MEMORY.md`. Whenever they tell you to save a signature, edit the account's `signature.md` as described in section 9.
+**Output**: JSON with `preview_url` for each attachment (local HTTP server URL).
+
+### Parse Attachment Content
+
+```bash
+# Parse attachments for specific email
+python scripts/mail_cli.py parse-attachments --message-id <message_id>
+
+# Parse all unprocessed attachments
+python scripts/mail_cli.py parse-attachments --all
+```
+
+**Supported formats**: PDF, Excel (.xlsx/.xls), PowerPoint (.pptx), images (OCR via vision model), text files.
+
+## AI Features
+
+### AI-Generated Reply
+
+```bash
+# Generate and preview reply
+python scripts/mail_cli.py ai-reply <message_id> --dry-run
+
+# Generate with intent guidance
+python scripts/mail_cli.py ai-reply <message_id> --intent "polite decline"
+
+# Include thread context
+python scripts/mail_cli.py ai-reply <message_id> --with-thread
+
+# Send directly (with confirmation)
+python scripts/mail_cli.py ai-reply <message_id>
+```
+
+**Flow**: Generates reply → Shows preview → Asks confirmation (y/n/e=edit) → Sends or cancels.
+
+### Email Templates
+
+```bash
+# List templates
+python scripts/mail_cli.py templates list
+
+# Show template
+python scripts/mail_cli.py templates show welcome
+
+# Create template
+python scripts/mail_cli.py templates create welcome --content "Hello {{name}}, ..." --required-vars name
+```
+
+## Configuration
+
+### Web UI Configuration
+
+```bash
+# Start config server (shows URL)
+python scripts/mail_cli.py config
+
+# Start on specific port
+python scripts/mail_cli.py config start --port 8080
+
+# Get config server URL
+python scripts/mail_cli.py config url
+
+# Stop config server
+python scripts/mail_cli.py config stop
+```
+
+Open the URL in browser to configure:
+- **AI Settings**: OpenAI API key, model names (LLM, embedding, reranker)
+- **Storage Settings**: Data directories, database paths
+- **Email Accounts**: IMAP/SMTP server settings
+
+### Configuration Storage
+
+Configuration is stored in SQLite at `./mail_data/config.db`.
+
+### Legacy config.txt Support
+
+For backward compatibility, `config.txt` is auto-imported on first run:
+
+```env
+# Email Account
+MAIL_ACCOUNT_1_EMAIL=your@email.com
+MAIL_ACCOUNT_1_PASSWORD=your-app-password
+MAIL_ACCOUNT_1_IMAP_SERVER=imap.gmail.com
+MAIL_ACCOUNT_1_IMAP_PORT=993
+MAIL_ACCOUNT_1_SMTP_SERVER=smtp.gmail.com
+MAIL_ACCOUNT_1_SMTP_PORT=465
+MAIL_ACCOUNT_1_USE_SSL=true
+
+# AI Configuration
+OPENAI_API_KEY=your_openai_api_key
+LLM_MODEL_NAME=gpt-4o-mini
+EMBEDDING_MODEL_NAME=text-embedding-3-small
+RERANKER_MODEL_NAME=BAAI/bge-reranker-base
+```
+
+## Data Storage
+
+### Directory Structure
+
+```
+mail_data/
+├── config.db                    # Configuration database
+├── <account_sanitized>/         # Per-account storage
+│   ├── mail_index.db           # Email index (SQLite + FTS5 + ChromaDB)
+│   ├── eml/                    # Raw email files
+│   ├── json/                   # Parsed email JSON
+│   ├── attachments/            # Downloaded attachments
+│   ├── signature.md            # Account signature (optional)
+│   └── templates/              # Email templates (optional)
+```
+
+### Account Path Sanitization
+
+Email addresses are sanitized for directory names:
+- `user@example.com` → `user_at_example_com`
+- Special characters removed, only alphanumeric, `-`, `_` kept
+
+## Output Formats
+
+All commands return JSON with consistent structure:
+
+### Success Response
+
+```json
+{
+  "status": "success",
+  "message": "Operation completed",
+  "data": { ... }
+}
+```
+
+### Error Response
+
+```json
+{
+  "status": "error",
+  "error_code": "USER_EMAIL_NOT_FOUND",
+  "message": "Email not found locally"
+}
+```
+
+### Error Codes
+
+| Code | Description |
+|------|-------------|
+| `USER_EMAIL_NOT_FOUND` | Email/account not found |
+| `USER_INVALID_PARAMETER` | Invalid input parameter |
+| `USER_MISSING_PARAMETER` | Required parameter missing |
+| `BIZ_ACCOUNT_NOT_CONFIGURED` | No email account configured |
+| `SERVER_IMAP_CONNECTION_FAILED` | IMAP connection error |
+| `SERVER_SMTP_SEND_FAILED` | SMTP send error |
+| `SERVER_DATABASE_ERROR` | Database error |
+| `INTERNAL_ERROR` | Internal server error |
+
+## Search Capabilities
+
+### Three Search Modes
+
+1. **FTS (Full-Text Search)**: Fast keyword search using SQLite FTS5
+2. **Vector Search**: Semantic similarity using OpenAI embeddings + ChromaDB
+3. **Hybrid Search**: Combines FTS + Vector with cross-encoder reranking
+
+### Rebuild Search Index
+
+```bash
+# Rebuild FTS5 and vector indices
+python scripts/mail_cli.py rebuild-index
+```
+
+## Requirements
+
+- Python 3.8+
+- OpenAI API key (for AI features)
+- Email account with IMAP/SMTP access
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Troubleshooting
+
+- **Config not found**: Run `python scripts/mail_cli.py config` to set up
+- **IMAP connection failed**: Check server settings and app passwords
+- **Search returns empty**: Run `rebuild-index` to rebuild search indices
+- **Attachments not previewing**: Check if attachment server is running (auto-starts on demand)
