@@ -7,10 +7,11 @@ Transform Mail Skill from a basic email tool into an intelligent assistant. The 
 ## Phases
 
 - [x] **Phase 1: Code Quality Foundation** - Test coverage, type annotations, unified error handling, lint standards
-- [ ] **Phase 2: Attachment Preview Service** - Local HTTP server for secure attachment preview and download
-- [ ] **Phase 3: Natural Language Search** - Intent-driven search with date parsing and sender matching
-- [ ] **Phase 4: Smart Classification** - Rule-based email importance and category classification
-- [ ] **Phase 5: User Experience Enhancement** - Reply templates, detail page optimization, and mark enhancements
+- [x] **Phase 2: Attachment Preview Service** - Local HTTP server for secure attachment preview and download
+- [x] **Phase 3: Natural Language Search** - Intent-driven search with date parsing and sender matching
+- [x] **Phase 4: Smart Classification** - Rule-based email importance and category classification
+- [x] **Phase 5: User Experience Enhancement** - Reply templates, detail page optimization, and mark enhancements
+- [ ] **Phase 6: Smart Enhancements** - Thread visualization, attachment AI, LLM-powered replies
 
 ## Phase Details
 
@@ -98,12 +99,36 @@ Plans:
 **Plans**: 6 plans in 3 waves
 
 Plans:
-- [ ] 05-00-PLAN.md — Test stubs for templates, detail, and batch mark modules (Wave 0)
-- [ ] 05-01-PLAN.md — YAML templates with variable placeholders and validation (TMPL-01, TMPL-02, TMPL-05)
-- [ ] 05-02-PLAN.md — Enhanced email detail formatting with Markdown, headers, classification, attachments (DET-01~05)
-- [ ] 05-03-PLAN.md — Batch operations and custom tags in database layer (MARK-01, MARK-02, MARK-04)
-- [ ] 05-04-PLAN.md — CLI integration for templates and enhanced detail view (TMPL-03, TMPL-04)
-- [ ] 05-05-PLAN.md — CLI integration for batch mark and tag commands (MARK-01, MARK-02, MARK-03)
+- [x] 05-00-PLAN.md — Test stubs for templates, detail, and batch mark modules (Wave 0)
+- [x] 05-01-PLAN.md — YAML templates with variable placeholders and validation (TMPL-01, TMPL-02, TMPL-05)
+- [x] 05-02-PLAN.md — Enhanced email detail formatting with Markdown, headers, classification, attachments (DET-01~05)
+- [x] 05-03-PLAN.md — Batch operations and custom tags in database layer (MARK-01, MARK-02, MARK-04)
+- [x] 05-04-PLAN.md — CLI integration for templates and enhanced detail view (TMPL-03, TMPL-04)
+- [x] 05-05-PLAN.md — CLI integration for batch mark and tag commands (MARK-01, MARK-02, MARK-03)
+
+### Phase 6: Smart Enhancements
+**Goal**: Enhance email thread visualization, attachment content understanding, and AI-powered reply composition
+**Depends on**: Phase 5
+**Requirements**: THREAD-01, THREAD-02, THREAD-03, ATTACH-AI-01, ATTACH-AI-02, REPLY-AI-01, REPLY-AI-02, REPLY-AI-03
+
+**Success Criteria** (what must be TRUE):
+  1. User can fetch one email and see all related correspondence (sent/received) in timeline view
+  2. User can see full detail for current email and summary for other emails in thread
+  3. User can parse attachments (PDF, Excel, PowerPoint, images) and see extracted content
+  4. User can request AI-generated reply suggestions with thread context
+  5. User confirms or edits AI reply before sending
+  6. AI learns from user feedback to improve future suggestions
+
+**Plans**: 7 plans in 5 waves
+
+Plans:
+- [ ] 06-00-PLAN.md — Test stubs for LLM client, thread manager, attachment parser, reply assistant (Wave 0)
+- [ ] 06-01-PLAN.md — LLM client abstraction with OpenAI SDK wrapper (THREAD-02, ATTACH-AI-02, REPLY-AI-01)
+- [ ] 06-02-PLAN.md — Document parsers for PDF, Excel, PowerPoint, text (ATTACH-AI-01)
+- [ ] 06-03-PLAN.md — Image parser with vision API and attachment content storage (ATTACH-AI-02)
+- [ ] 06-04-PLAN.md — Enhanced thread management with sender matching and timeline view (THREAD-01, THREAD-02, THREAD-03)
+- [ ] 06-05-PLAN.md — AI reply composition with feedback learning (REPLY-AI-01, REPLY-AI-03)
+- [ ] 06-06-PLAN.md — CLI integration for parse-attachments, read --thread, ai-reply (ATTACH-AI-01, ATTACH-AI-02, REPLY-AI-02)
 
 ## Progress
 
@@ -113,25 +138,9 @@ Plans:
 | 2. Attachment Preview Service | 2/2 | Complete | 02-01-PLAN, 02-02-PLAN |
 | 3. Natural Language Search | 3/4 | In Progress|  |
 | 4. Smart Classification | 2/4 | In Progress | 04-00-PLAN, 04-01-PLAN |
-| 5. User Experience Enhancement | 0/6 | Not started | - |
-| 6. Smart Enhancements | 0/TBD | Not started | - |
-
-### Phase 6: Smart Enhancements (邮件关联、附件解读、大模型润色)
-
-**Goal**: Enhance email thread visualization, attachment content understanding, and AI-powered reply composition
-**Depends on**: Phase 5
-**Requirements**: THREAD-01, THREAD-02, THREAD-03, ATTACH-AI-01, ATTACH-AI-02, REPLY-AI-01, REPLY-AI-02, REPLY-AI-03
-
-Features:
-1. **邮件关联显示增强**: Fetch one email and auto-retrieve all related correspondence (sent/received) with timeline view - full display for current email, summary for others
-2. **附件智能解读**: Parse and summarize Excel, doc, PPT, PDF, txt, md, images for enhanced search indexing
-3. **大模型润色回复**: AI-polished email replies with user confirmation, learning from feedback history
-
-**Plans**: TBD
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 6 to break down)
+| 5. User Experience Enhancement | 6/6 | Complete | 05-00-PLAN, 05-01-PLAN, 05-02-PLAN, 05-03-PLAN, 05-04-PLAN, 05-05-PLAN |
+| 6. Smart Enhancements | 0/7 | Not started | - |
 
 ---
 *Roadmap created: 2026-04-04*
-*Last updated: 2026-04-04 - Phase 5 plans created*
+*Last updated: 2026-04-05 - Phase 6 plans created*
