@@ -415,3 +415,104 @@ def format_summary_report(
             sections.append("")
 
     return "\n".join(sections)
+
+
+def generate_email_summary_report(
+    db: Any,
+    llm_client: "LLMClient",
+    recipient: str,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    days_back: int = 7,
+    limit: int = 100,
+    output_path: str | None = None,
+) -> str:
+    """Generate complete email summary report.
+
+    Orchestrates the full report generation pipeline:
+    1. Fetches emails by date range
+    2. Groups emails by sender
+    3. Summarizes each email using LLM
+    4. Generates overall summary
+    5. Formats as Markdown
+
+    Args:
+        db: MailDatabase instance with search_emails method.
+        llm_client: LLM client for summarization.
+        recipient: Email address of the recipient.
+        date_from: Start date (default: days_back from today).
+        date_to: End date (default: today).
+        days_back: Number of days to look back if date_from not specified.
+        limit: Maximum emails to process.
+        output_path: Optional path to save report as file.
+
+    Returns:
+        Markdown-formatted report string, or message if no emails found.
+
+    Example:
+        >>> from mail_manager.db import MailDatabase
+        >>> from mail_manager.llm.client import LLMClient
+        >>> db = MailDatabase("emails.db")
+        >>> llm = LLMClient()
+        >>> report = generate_email_summary_report(
+        ...     db=db, llm_client=llm, recipient="user@example.com"
+        ... )
+        >>> "# Email Summary Report" in report
+        True
+    """
+    from datetime import timedelta
+
+    # Set default date range
+    if date_to is None:
+        date_to = date.today()
+    if date_from is None:
+        date_from = date_to - timedelta(days=days_back)
+
+    # Step 1: Fetch emails
+    emails = db.search_emails(
+        date_from=date_from.isoformat() if date_from else None,
+        date_to=date_to.isoformat() if date_to else None,
+        limit=limit,
+    )
+
+    if not emails:
+        return f"No emails found for {recipient} between {date_from} and {date_to}."
+
+    # Step 2: Group by sender
+    sender_groups = group_emails_by_sender(emails)
+
+    # Step 3: Generate summaries per sender
+    sender_summaries: dict[str, list[tuple[dict[str, Any], EmailSummary]]] = {}
+    all_summaries: dict[str, list[EmailSummary]] = {}
+
+    for sender, sender_emails in sender_groups.items():
+        sender_summaries[sender] = []
+        all_summaries[sender] = []
+
+        for email in sender_emails:
+            try:
+                summary = summarize_email(llm_client, email)
+                sender_summaries[sender].append((email, summary))
+                all_summaries[sender].append(summary)
+            except Exception:
+                # Skip emails that fail to summarize
+                continue
+
+    # Step 4: Generate overall summary
+    overall = generate_overall_summary(llm_client, all_summaries)
+
+    # Step 5: Format report
+    report = format_summary_report(
+        recipient=recipient,
+        date_from=date_from,
+        date_to=date_to,
+        sender_summaries=sender_summaries,
+        overall=overall,
+    )
+
+    # Step 6: Save to file if path provided
+    if output_path:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(report)
+
+    return report

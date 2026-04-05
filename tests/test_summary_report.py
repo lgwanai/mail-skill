@@ -4,6 +4,7 @@ Tests for group_emails_by_sender, EmailSummary dataclass, and summarize_email.
 """
 
 from datetime import datetime
+from typing import Any
 
 import pytest
 
@@ -854,3 +855,146 @@ class TestFormatSummaryReport:
         # The content should be present (may or may not be escaped depending on implementation)
         assert "special" in result
         assert "asterisk" in result
+
+
+class TestGenerateReport:
+    """Tests for generate_email_summary_report function (SUMMARY-04)."""
+
+    def test_returns_formatted_markdown(self) -> None:
+        """Test generate_email_summary_report returns formatted Markdown."""
+        import json
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import generate_email_summary_report
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = [
+            {
+                "message_id": "msg-1",
+                "sender": "alice@example.com",
+                "subject": "Test Email",
+                "date": datetime(2024, 1, 15),
+                "body_text": "This is a test email.",
+            }
+        ]
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content=json.dumps(
+                {
+                    "key_points": ["Point 1"],
+                    "action_items": [],
+                    "deadline": None,
+                    "priority": "medium",
+                    "one_liner": "Test summary.",
+                }
+            )
+        )
+
+        result = generate_email_summary_report(
+            db=mock_db,
+            llm_client=mock_llm,
+            recipient="test@example.com",
+            date_from=date(2024, 1, 1),
+            date_to=date(2024, 1, 7),
+        )
+
+        assert isinstance(result, str)
+        assert "# Email Summary Report" in result
+
+    def test_returns_message_for_empty_email_list(self) -> None:
+        """Test generate_email_summary_report returns message for empty email list."""
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import generate_email_summary_report
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = []
+
+        mock_llm = MagicMock()
+
+        result = generate_email_summary_report(
+            db=mock_db,
+            llm_client=mock_llm,
+            recipient="test@example.com",
+            date_from=date(2024, 1, 1),
+            date_to=date(2024, 1, 7),
+        )
+
+        assert "No emails found" in result
+
+    def test_saves_to_file_when_output_path_provided(self, tmp_path: Any) -> None:
+        """Test generate_email_summary_report saves to file when output_path provided."""
+        import json
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import generate_email_summary_report
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = [
+            {
+                "message_id": "msg-1",
+                "sender": "alice@example.com",
+                "subject": "Test Email",
+                "date": datetime(2024, 1, 15),
+                "body_text": "This is a test email.",
+            }
+        ]
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content=json.dumps(
+                {
+                    "key_points": ["Point 1"],
+                    "action_items": [],
+                    "deadline": None,
+                    "priority": "medium",
+                    "one_liner": "Test summary.",
+                }
+            )
+        )
+
+        output_file = tmp_path / "report.md"
+
+        result = generate_email_summary_report(
+            db=mock_db,
+            llm_client=mock_llm,
+            recipient="test@example.com",
+            date_from=date(2024, 1, 1),
+            date_to=date(2024, 1, 7),
+            output_path=str(output_file),
+        )
+
+        assert output_file.exists()
+        assert "# Email Summary Report" in output_file.read_text()
+        assert result == output_file.read_text()
+
+    def test_uses_default_date_range_when_not_specified(self) -> None:
+        """Test generate_email_summary_report uses default date range when not specified."""
+        import json
+        from datetime import date, timedelta
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import generate_email_summary_report
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = []
+
+        mock_llm = MagicMock()
+
+        generate_email_summary_report(
+            db=mock_db,
+            llm_client=mock_llm,
+            recipient="test@example.com",
+        )
+
+        # Verify db.search_emails was called with date parameters
+        mock_db.search_emails.assert_called_once()
+        call_kwargs = mock_db.search_emails.call_args.kwargs
+
+        # Default is 7 days back from today
+        assert "date_from" in call_kwargs
+        assert "date_to" in call_kwargs
