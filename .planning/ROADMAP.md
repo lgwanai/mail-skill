@@ -122,9 +122,9 @@ Plans:
 **Plans**: 7 plans in 5 waves
 
 Plans:
-- [ ] 06-00-PLAN.md — Test stubs for LLM client, thread manager, attachment parser, reply assistant (Wave 0)
-- [ ] 06-01-PLAN.md — LLM client abstraction with OpenAI SDK wrapper (THREAD-02, ATTACH-AI-02, REPLY-AI-01)
-- [ ] 06-02-PLAN.md — Document parsers for PDF, Excel, PowerPoint, text (ATTACH-AI-01)
+- [x] 06-00-PLAN.md — Test stubs for LLM client, thread manager, attachment parser, reply assistant (Wave 0)
+- [x] 06-01-PLAN.md — LLM client abstraction with OpenAI SDK wrapper (THREAD-02, ATTACH-AI-02, REPLY-AI-01)
+- [x] 06-02-PLAN.md — Document parsers for PDF, Excel, PowerPoint, text (ATTACH-AI-01)
 - [ ] 06-03-PLAN.md — Image parser with vision API and attachment content storage (ATTACH-AI-02)
 - [ ] 06-04-PLAN.md — Enhanced thread management with sender matching and timeline view (THREAD-01, THREAD-02, THREAD-03)
 - [ ] 06-05-PLAN.md — AI reply composition with feedback learning (REPLY-AI-01, REPLY-AI-03)
@@ -139,7 +139,7 @@ Plans:
 | 3. Natural Language Search | 3/4 | In Progress|  |
 | 4. Smart Classification | 2/4 | In Progress | 04-00-PLAN, 04-01-PLAN |
 | 5. User Experience Enhancement | 6/6 | Complete | 05-00-PLAN, 05-01-PLAN, 05-02-PLAN, 05-03-PLAN, 05-04-PLAN, 05-05-PLAN |
-| 6. Smart Enhancements | 0/7 | Not started | - |
+| 6. Smart Enhancements | 3/7 | In Progress | 06-00-PLAN, 06-01-PLAN, 06-02-PLAN |
 
 ---
 *Roadmap created: 2026-04-04*
