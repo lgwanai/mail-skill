@@ -11,7 +11,8 @@ Transform Mail Skill from a basic email tool into an intelligent assistant. The 
 - [x] **Phase 3: Natural Language Search** - Intent-driven search with date parsing and sender matching
 - [x] **Phase 4: Smart Classification** - Rule-based email importance and category classification
 - [x] **Phase 5: User Experience Enhancement** - Reply templates, detail page optimization, and mark enhancements
-- [ ] **Phase 6: Smart Enhancements** - Thread visualization, attachment AI, LLM-powered replies
+- [x] **Phase 6: Smart Enhancements** - Thread visualization, attachment AI, LLM-powered replies
+- [ ] **Phase 7: Email Summary Report** - Summarize emails by sender for given recipient and time period
 
 ## Phase Details
 
@@ -125,10 +126,10 @@ Plans:
 - [x] 06-00-PLAN.md — Test stubs for LLM client, thread manager, attachment parser, reply assistant (Wave 0)
 - [x] 06-01-PLAN.md — LLM client abstraction with OpenAI SDK wrapper (THREAD-02, ATTACH-AI-02, REPLY-AI-01)
 - [x] 06-02-PLAN.md — Document parsers for PDF, Excel, PowerPoint, text (ATTACH-AI-01)
-- [ ] 06-03-PLAN.md — Image parser with vision API and attachment content storage (ATTACH-AI-02)
-- [ ] 06-04-PLAN.md — Enhanced thread management with sender matching and timeline view (THREAD-01, THREAD-02, THREAD-03)
-- [ ] 06-05-PLAN.md — AI reply composition with feedback learning (REPLY-AI-01, REPLY-AI-03)
-- [ ] 06-06-PLAN.md — CLI integration for parse-attachments, read --thread, ai-reply (ATTACH-AI-01, ATTACH-AI-02, REPLY-AI-02)
+- [x] 06-03-PLAN.md — Image parser with vision API and attachment content storage (ATTACH-AI-02)
+- [x] 06-04-PLAN.md — Enhanced thread management with sender matching and timeline view (THREAD-01, THREAD-02, THREAD-03)
+- [x] 06-05-PLAN.md — AI reply composition with feedback learning (REPLY-AI-01, REPLY-AI-03)
+- [x] 06-06-PLAN.md — CLI integration for parse-attachments, read --thread, ai-reply (ATTACH-AI-01, ATTACH-AI-02, REPLY-AI-02)
 
 ## Progress
 
@@ -136,10 +137,28 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Code Quality Foundation | 6/6 | Complete | 01-PLAN, 02-PLAN, 03-PLAN, 04-PLAN, 05-PLAN, 06-PLAN |
 | 2. Attachment Preview Service | 2/2 | Complete | 02-01-PLAN, 02-02-PLAN |
-| 3. Natural Language Search | 3/4 | In Progress|  |
-| 4. Smart Classification | 2/4 | In Progress | 04-00-PLAN, 04-01-PLAN |
+| 3. Natural Language Search | 4/4 | Complete | 03-00-PLAN, 03-01-PLAN, 03-02-PLAN, 03-03-PLAN |
+| 4. Smart Classification | 4/4 | Complete | 04-00-PLAN, 04-01-PLAN, 04-02-PLAN, 04-03-PLAN |
 | 5. User Experience Enhancement | 6/6 | Complete | 05-00-PLAN, 05-01-PLAN, 05-02-PLAN, 05-03-PLAN, 05-04-PLAN, 05-05-PLAN |
-| 6. Smart Enhancements | 3/7 | In Progress | 06-00-PLAN, 06-01-PLAN, 06-02-PLAN |
+| 6. Smart Enhancements | 7/7 | Complete | 06-00-PLAN, 06-01-PLAN, 06-02-PLAN, 06-03-PLAN, 06-04-PLAN, 06-05-PLAN, 06-06-PLAN |
+| 7. Email Summary Report | 0/TBD | Not started | - |
+
+### Phase 7: Email Summary Report (邮件汇总报告)
+
+**Goal**: 按照给定的收件人和给定的时间段，汇总一发件人维度的邮件，每个邮件进行摘要总结，并总体给出总结。格式需要清晰，易读
+**Depends on**: Phase 6
+**Requirements**: SUMMARY-01, SUMMARY-02, SUMMARY-03, SUMMARY-04
+
+**Features:**
+1. **按发件人分组**: 根据收件人和时间范围筛选邮件，按发件人维度分组展示
+2. **邮件摘要**: 每封邮件生成简明摘要，包含关键信息和行动项
+3. **总体总结**: 汇总所有邮件，给出整体概述和待办事项清单
+4. **格式化输出**: 清晰易读的 Markdown 格式，支持导出
+
+**Plans**: TBD
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 7 to break down)
 
 ---
 *Roadmap created: 2026-04-04*
