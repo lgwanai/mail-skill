@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 06-smart-enhancements/04-PLAN.md
-last_updated: "2026-04-05T02:30:00.000Z"
-last_activity: "2026-04-05 - Completed Phase 6 Plan 04: Enhanced Thread Management"
+stopped_at: Completed 06-smart-enhancements/03-PLAN.md
+last_updated: "2026-04-05T02:30:23Z"
+last_activity: "2026-04-05 - Completed Phase 6 Plan 03: Image Parser for Vision API"
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 29
-  completed_plans: 27
-  percent: 90
+  completed_plans: 25
+  percent: 74
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** Let email management transform from "manual operations" to "intent-driven"
-**Current focus:** Phase 6: Smart Enhancements - Plan 02 Complete
+**Current focus:** Phase 6: Smart Enhancements - Plan 03 Complete
 
 ## Current Position
 
 Phase: 6 of 6 (Smart Enhancements) - In Progress
-Plan: 4 of 7 in current phase
+Plan: 3 of 7 in current phase
 Status: In Progress
-Last activity: 2026-04-05 - Completed Phase 6 Plan 04: Enhanced Thread Management
+Last activity: 2026-04-05 - Completed Phase 6 Plan 03: Image Parser for Vision API
 
-Progress: [█████████░] 90%
+Progress: [=======----] 74%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 18
+- Total plans completed: 25
 - Average duration: 4 min
-- Total execution time: 72 min
+- Total execution time: 100 min
 
 **By Phase:**
 
@@ -48,14 +48,15 @@ Progress: [█████████░] 90%
 | 03-natural-language-search | 3 | 16 min | 5 min |
 | 04-smart-classification | 3 | 16 min | 5.3 min |
 | 05-user-experience-enhancement | 1 | 5 min | 5 min |
+| 06-smart-enhancements | 3 | 24 min | 8 min |
 
 **Recent Trend:**
-- Phase 6 Plan 04 (Enhanced Thread Management) completed successfully
-- Thread timeline with participant-based expansion and LLM summaries
-- Ready for thread-aware email views and reply context
+- Phase 6 Plan 03 (Image Parser for Vision API) completed successfully
+- Image parsing via OpenAI Vision API with database content storage
+- Ready for attachment content indexing and search
 
 *Updated after each plan completion*
-| Phase 06-smart-enhancements P04 | 3min | 3 tasks | 2 files |
+| Phase 06-smart-enhancements P03 | 8min | 3 tasks | 4 files |
 | Phase 06-smart-enhancements P02 | 5min | 3 tasks | 7 files |
 | Phase 06-smart-enhancements P01 | 9min | 3 tasks | 5 files |
 
@@ -94,44 +95,44 @@ Recent decisions affecting current work:
 - [Phase 06-smart-enhancements]: Thin wrapper around OpenAI SDK instead of custom HTTP client
 - [Phase 06-smart-enhancements]: Wrap all OpenAI exceptions in MailSkillError for consistent error handling
 - [Phase 06-smart-enhancements]: Use environment variables for all LLM configuration (API key, base URL, model, timeout)
-- [Phase 06-smart-enhancements P04]: Timeline always sorted by date, even without sender thread expansion
-- [Phase 06-smart-enhancements P04]: Full mode without current_message_id shows all emails in detail
-- [Phase 06-smart-enhancements P04]: Thread summary skipped for single-email timelines
+- [Phase 06-smart-enhancements P03]: ImageParser uses LLMClient for vision API instead of direct OpenAI SDK call
+- [Phase 06-smart-enhancements P03]: Vision API messages use list content with text and image_url types
+- [Phase 06-smart-enhancements P03]: content_text column added to attachments table for parsed content storage
 
 ### Pending Todos
 
-None - Phase 6 Plan 04 complete.
+None - Phase 6 Plan 03 complete.
 
 ### Blockers/Concerns
 
-None - Phase 6 Plan 04 complete.
+None - Phase 6 Plan 03 complete.
 
 ### Roadmap Evolution
 
 - Phase 6 added: Smart Enhancements (邮件关联、附件解读、大模型润色)
 
-## Phase 6 Plan 04 Success Criteria
+## Phase 6 Plan 03 Success Criteria
 
 All success criteria met:
 
-1. get_enhanced_thread_timeline includes participant emails (THREAD-01, THREAD-03)
-2. generate_thread_summary uses LLM for summaries (THREAD-02)
-3. format_thread_view shows current vs other emails (THREAD-02)
-4. All tests pass with 96% coverage
-5. Thread view integrates with existing detail.py formatting
+1. ImageParser implemented using LLM client for vision API
+2. Database schema extended with content_text column
+3. save_attachment_content and get_attachment_content methods work
+4. Integration helper parses and stores content
+5. All tests pass (107 tests)
 
 ## Session Continuity
 
-Last session: 2026-04-05T02:30:00.000Z
-Stopped at: Completed 06-smart-enhancements/04-PLAN.md
+Last session: 2026-04-05T02:22:22Z
+Stopped at: Completed 06-smart-enhancements/03-PLAN.md
 Resume file: None
 
 ## Next Plan
 
-Phase 6 Plan 5: Reply Assistant
-- Goal: Implement reply composition with LLM
-- Requirements: REPLY-01, REPLY-02
-- Plans: 06-05-PLAN.md (need to run /gsd:execute-phase for next plan)
+Phase 6 Plan 4: Enhanced Thread Management
+- Goal: Thread timeline with participant expansion and LLM summaries
+- Requirements: THREAD-01, THREAD-02, THREAD-03
+- Plans: 06-04-PLAN.md (need to run /gsd:execute-phase for next plan)
 
 ---
 *State initialized: 2026-04-04*

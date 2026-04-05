@@ -68,6 +68,11 @@
 - **AI-02**: 智能跟进提醒（3天未回复提醒）
 - **AI-03**: 邮件行动项提取
 
+### Attachment AI Features
+
+- [x] **ATTACH-AI-01**: LLM client infrastructure for AI-powered features
+- [x] **ATTACH-AI-02**: Image parsing via vision API with content storage for search
+
 ### Analytics
 
 - **ANLT-01**: 邮件统计仪表板（响应时间、邮件量趋势）
@@ -121,6 +126,8 @@
 | MARK-02 | Phase 5 | Pending |
 | MARK-03 | Phase 5 | Pending |
 | MARK-04 | Phase 5 | Pending |
+| ATTACH-AI-01 | Phase 6 | Complete |
+| ATTACH-AI-02 | Phase 6 | Complete |
 
 **Coverage:**
 - v1 requirements: 30 total
