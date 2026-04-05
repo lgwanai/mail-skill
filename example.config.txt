@@ -3,7 +3,7 @@
 
 # --- Account 1 ---
 MAIL_ACCOUNT_1_EMAIL=your_email@example.com
-# 密码请使用“应用专用密码（授权码）”，而不是你的登录密码
+# 密码请使用"应用专用密码（授权码）"，而不是你的登录密码
 MAIL_ACCOUNT_1_PASSWORD=your_app_password
 MAIL_ACCOUNT_1_IMAP_SERVER=imap.example.com
 MAIL_ACCOUNT_1_IMAP_PORT=993
@@ -20,22 +20,42 @@ MAIL_ACCOUNT_1_USE_SSL=true
 # MAIL_ACCOUNT_2_SMTP_PORT=465
 # MAIL_ACCOUNT_2_USE_SSL=true
 
-# --- Vector Search (Optional: 向量语义检索配置) ---
-# 默认使用本地 embedding 模型。如需使用 OpenAI 等云端 API，请配置：
-# OPENAI_API_KEY=your_api_key
+# ============================================================
+# AI 功能配置 (Phase 6-7 新增)
+# ============================================================
+
+# --- LLM 配置 (用于 AI 回复、邮件摘要等功能) ---
+# 必须配置，否则 AI 功能无法使用
+OPENAI_API_KEY=your_openai_api_key
+# 可选：自定义 API 地址（如使用 Azure OpenAI 或自部署服务）
 # OPENAI_API_BASE=https://api.openai.com/v1
+# 可选：指定模型名称（默认 gpt-4o-mini）
+LLM_MODEL_NAME=gpt-4o-mini
+# 可选：请求超时时间（默认 30 秒）
+LLM_TIMEOUT=30
+
+# --- 向量检索配置 (用于语义搜索) ---
+# 如果配置了 OPENAI_API_KEY，默认使用云端 embedding
+# 可选：指定 embedding 模型
 # EMBEDDING_MODEL_NAME=text-embedding-3-small
 
-# --- Reranker Model (Optional: 混合检索重排模型配置) ---
-# 混合检索 (--hybrid) 默认使用的 Rerank 模型，可在此处配置修改
+# --- Rerank 模型配置 (用于混合检索重排) ---
+# 混合检索 (--hybrid) 时使用的重排模型
+# 默认使用本地模型，需先下载模型文件
 # RERANKER_MODEL_NAME=BAAI/bge-reranker-base
 
-# --- Storage Configuration ---
+# ============================================================
+# 存储配置
+# ============================================================
+
 MAIL_STORAGE_ROOT=./mail_data
 MAIL_ATTACHMENT_PATH=./mail_data/attachments
 MAIL_DB_PATH=./mail_data/mail_index.db
 
-# --- Behavior Configuration ---
+# ============================================================
+# 行为配置
+# ============================================================
+
 MAIL_DEFAULT_FETCH_DAYS=7
 MAIL_RETRY_COUNT=3
 MAIL_TIMEOUT=30
