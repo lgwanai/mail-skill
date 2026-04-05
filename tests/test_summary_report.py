@@ -427,32 +427,179 @@ class TestSummarizeEmail:
         assert len(prompt_content) < 3500  # Should be truncated
 
 
+class TestOverallSummaryPrompt:
+    """Tests for OVERALL_SUMMARY_PROMPT constant (SUMMARY-03)."""
+
+    def test_prompt_exists(self) -> None:
+        """Test OVERALL_SUMMARY_PROMPT exists in prompts module."""
+        from mail_manager.llm.prompts import OVERALL_SUMMARY_PROMPT
+
+        assert OVERALL_SUMMARY_PROMPT is not None
+        assert isinstance(OVERALL_SUMMARY_PROMPT, str)
+
+    def test_prompt_requests_json_output(self) -> None:
+        """Test prompt requests JSON formatted output with expected keys."""
+        from mail_manager.llm.prompts import OVERALL_SUMMARY_PROMPT
+
+        # Should request JSON format with expected keys
+        assert "overview" in OVERALL_SUMMARY_PROMPT
+        assert "key_themes" in OVERALL_SUMMARY_PROMPT
+        assert "all_action_items" in OVERALL_SUMMARY_PROMPT
+        assert "upcoming_deadlines" in OVERALL_SUMMARY_PROMPT
+        assert "recommended_priority" in OVERALL_SUMMARY_PROMPT
+
+    def test_prompt_has_sender_summaries_placeholder(self) -> None:
+        """Test prompt has placeholder for sender summaries."""
+        from mail_manager.llm.prompts import OVERALL_SUMMARY_PROMPT
+
+        assert "{sender_summaries}" in OVERALL_SUMMARY_PROMPT
+
+
 class TestOverallSummary:
     """Tests for generate_overall_summary function (SUMMARY-03)."""
 
     def test_returns_overall_summary_dataclass(self) -> None:
         """Test generate_overall_summary returns OverallSummary dataclass."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from unittest.mock import MagicMock
 
-    def test_summary_includes_sender_summaries(self) -> None:
-        """Test overall summary includes summaries per sender."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from mail_manager.summary_report import OverallSummary, generate_overall_summary
 
-    def test_summary_includes_key_themes(self) -> None:
-        """Test overall summary identifies key themes across emails."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content='{"overview": "Test overview", "key_themes": [], "all_action_items": [], "upcoming_deadlines": [], "recommended_priority": []}'
+        )
 
-    def test_summary_includes_action_items(self) -> None:
-        """Test overall summary extracts action items."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        sender_summaries: dict[str, list] = {}
+        result = generate_overall_summary(mock_llm, sender_summaries)
+        assert isinstance(result, OverallSummary)
 
-    def test_summary_includes_time_range(self) -> None:
-        """Test overall summary includes time range of emails."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+    def test_summary_includes_all_fields(self) -> None:
+        """Test overall summary includes all required fields."""
+        import json
+        from unittest.mock import MagicMock
 
-    def test_summary_handles_empty_email_groups(self) -> None:
+        from mail_manager.summary_report import EmailSummary, OverallSummary, generate_overall_summary
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content=json.dumps(
+                {
+                    "overview": "Two senders with project updates",
+                    "key_themes": ["Project progress", "Planning"],
+                    "all_action_items": [
+                        {"item": "Review API design", "sender": "alice@example.com", "priority": "high"}
+                    ],
+                    "upcoming_deadlines": [
+                        {"date": "2024-01-20", "description": "API design review", "sender": "alice@example.com"}
+                    ],
+                    "recommended_priority": ["Review API design from Alice"],
+                }
+            )
+        )
+
+        sender_summaries = {
+            "alice@example.com": [
+                EmailSummary(
+                    subject="Project Update",
+                    key_points=["Project on track"],
+                    action_items=["Review API design"],
+                    deadline="2024-01-20",
+                    priority="high",
+                    one_liner="Project update with deadline.",
+                )
+            ]
+        }
+
+        result = generate_overall_summary(mock_llm, sender_summaries)
+        assert result.overview == "Two senders with project updates"
+        assert result.key_themes == ["Project progress", "Planning"]
+        assert len(result.all_action_items) == 1
+        assert len(result.upcoming_deadlines) == 1
+        assert len(result.recommended_priority) == 1
+
+    def test_summary_handles_empty_summaries(self) -> None:
         """Test generate_overall_summary handles empty input."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import OverallSummary, generate_overall_summary
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content='{"overview": "No emails to summarize.", "key_themes": [], "all_action_items": [], "upcoming_deadlines": [], "recommended_priority": []}'
+        )
+
+        result = generate_overall_summary(mock_llm, {})
+        assert isinstance(result, OverallSummary)
+        assert result.overview == "No emails to summarize."
+
+    def test_summary_handles_json_parse_error_with_fallback(self) -> None:
+        """Test generate_overall_summary handles JSON parse errors with fallback."""
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import OverallSummary, generate_overall_summary
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(content="This is not valid JSON")
+
+        result = generate_overall_summary(mock_llm, {})
+        assert isinstance(result, OverallSummary)
+        # Should have fallback values
+        assert result.key_themes == []
+        assert result.all_action_items == []
+        assert result.upcoming_deadlines == []
+        assert result.recommended_priority == []
+
+    def test_action_items_include_sender_attribution(self) -> None:
+        """Test action items include sender attribution."""
+        import json
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import EmailSummary, generate_overall_summary
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content=json.dumps(
+                {
+                    "overview": "Test",
+                    "key_themes": [],
+                    "all_action_items": [
+                        {"item": "Task 1", "sender": "alice@example.com", "priority": "high"},
+                        {"item": "Task 2", "sender": "bob@example.com", "priority": "medium"},
+                    ],
+                    "upcoming_deadlines": [],
+                    "recommended_priority": [],
+                }
+            )
+        )
+
+        sender_summaries = {
+            "alice@example.com": [
+                EmailSummary(subject="Email 1", action_items=["Task 1"], priority="high", one_liner="")
+            ],
+            "bob@example.com": [
+                EmailSummary(subject="Email 2", action_items=["Task 2"], priority="medium", one_liner="")
+            ],
+        }
+
+        result = generate_overall_summary(mock_llm, sender_summaries)
+        assert len(result.all_action_items) == 2
+        assert result.all_action_items[0]["sender"] == "alice@example.com"
+        assert result.all_action_items[1]["sender"] == "bob@example.com"
+
+    def test_handles_markdown_code_block_in_response(self) -> None:
+        """Test generate_overall_summary handles JSON in markdown code block."""
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import OverallSummary, generate_overall_summary
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content='```json\n{"overview": "Test overview", "key_themes": [], "all_action_items": [], "upcoming_deadlines": [], "recommended_priority": []}\n```'
+        )
+
+        result = generate_overall_summary(mock_llm, {})
+        assert isinstance(result, OverallSummary)
+        assert result.overview == "Test overview"
 
 
 class TestFormatSummaryReport:

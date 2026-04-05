@@ -55,3 +55,37 @@ Body:
 {body}
 
 Return only the JSON object, no additional text."""
+
+# Overall summary prompt for aggregating individual email summaries
+OVERALL_SUMMARY_PROMPT = """You are analyzing a collection of email summaries to create an executive summary.
+
+Here are the email summaries grouped by sender:
+
+{sender_summaries}
+
+Provide your response in this exact JSON format:
+{{
+    "overview": "2-3 sentence overview of all emails",
+    "key_themes": ["theme 1", "theme 2", "theme 3"],
+    "all_action_items": [
+        {{"item": "action description", "sender": "sender email", "priority": "high|medium|low"}},
+        ...
+    ],
+    "upcoming_deadlines": [
+        {{"date": "YYYY-MM-DD", "description": "what is due", "sender": "sender email"}},
+        ...
+    ],
+    "recommended_priority": [
+        "Most urgent item to address",
+        "Second most urgent",
+        "Third most urgent"
+    ]
+}}
+
+Focus on:
+1. What are the main themes across all emails?
+2. What actions need to be taken?
+3. What deadlines are approaching?
+4. What should be prioritized?
+
+Return only the JSON object, no additional text."""
