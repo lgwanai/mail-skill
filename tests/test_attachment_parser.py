@@ -103,6 +103,30 @@ class TestParserFactory:
         assert parser is not None
         assert parser.__class__.__name__ == "PDFParser"
 
+    def test_get_parser_returns_image_parser_for_jpg_extension(self) -> None:
+        """get_parser() returns ImageParser for .jpg files."""
+        from scripts.mail_manager.attachment_parser import get_parser
+
+        parser = get_parser(Path("test.jpg"))
+        assert parser is not None
+        assert parser.__class__.__name__ == "ImageParser"
+
+    def test_get_parser_returns_image_parser_for_png_extension(self) -> None:
+        """get_parser() returns ImageParser for .png files."""
+        from scripts.mail_manager.attachment_parser import get_parser
+
+        parser = get_parser(Path("test.png"))
+        assert parser is not None
+        assert parser.__class__.__name__ == "ImageParser"
+
+    def test_get_parser_returns_image_parser_for_gif_extension(self) -> None:
+        """get_parser() returns ImageParser for .gif files."""
+        from scripts.mail_manager.attachment_parser import get_parser
+
+        parser = get_parser(Path("test.gif"))
+        assert parser is not None
+        assert parser.__class__.__name__ == "ImageParser"
+
 
 class TestParseAttachmentFactory:
     """Tests for parse_attachment() factory function."""
@@ -453,3 +477,134 @@ class TestTextParser:
         metadata = parser.extract_metadata(test_file)
 
         assert metadata["type"] == "markdown"
+
+
+class TestImageParser:
+    """Tests for image parser implementation using vision API."""
+
+    def test_can_parse_returns_true_for_jpg(self) -> None:
+        """ImageParser.can_parse() returns True for .jpg files."""
+        from scripts.mail_manager.attachment_parser.image_parser import ImageParser
+
+        parser = ImageParser()
+        assert parser.can_parse(Path("test.jpg")) is True
+        assert parser.can_parse(Path("test.JPG")) is True
+
+    def test_can_parse_returns_true_for_jpeg(self) -> None:
+        """ImageParser.can_parse() returns True for .jpeg files."""
+        from scripts.mail_manager.attachment_parser.image_parser import ImageParser
+
+        parser = ImageParser()
+        assert parser.can_parse(Path("test.jpeg")) is True
+        assert parser.can_parse(Path("test.JPEG")) is True
+
+    def test_can_parse_returns_true_for_png(self) -> None:
+        """ImageParser.can_parse() returns True for .png files."""
+        from scripts.mail_manager.attachment_parser.image_parser import ImageParser
+
+        parser = ImageParser()
+        assert parser.can_parse(Path("test.png")) is True
+        assert parser.can_parse(Path("test.PNG")) is True
+
+    def test_can_parse_returns_true_for_gif(self) -> None:
+        """ImageParser.can_parse() returns True for .gif files."""
+        from scripts.mail_manager.attachment_parser.image_parser import ImageParser
+
+        parser = ImageParser()
+        assert parser.can_parse(Path("test.gif")) is True
+        assert parser.can_parse(Path("test.GIF")) is True
+
+    def test_can_parse_returns_false_for_non_image(self) -> None:
+        """ImageParser.can_parse() returns False for non-image files."""
+        from scripts.mail_manager.attachment_parser.image_parser import ImageParser
+
+        parser = ImageParser()
+        assert parser.can_parse(Path("test.pdf")) is False
+        assert parser.can_parse(Path("test.txt")) is False
+
+    def test_extract_text_encodes_image_and_calls_vision_api(self, tmp_path: Path) -> None:
+        """ImageParser.extract_text() encodes image as base64 and calls vision API."""
+        from scripts.mail_manager.attachment_parser.image_parser import ImageParser
+
+        parser = ImageParser()
+        test_file = tmp_path / "test.jpg"
+        # Create a minimal valid JPEG (1x1 red pixel)
+        test_file.write_bytes(
+            b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+            b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t"
+            b"\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a"
+            b"\x1f\x1e\x1d\x1a\x1c\x1c $. ' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00"
+            b"\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b"
+            b"\xff\xc4\x00\xb5\x10\x00\x02\x01\x03\x03\x02\x04\x03\x05\x05\x04\x04\x00\x00\x01}\x01\x02\x03\x00\x04\x11\x05\x12!1A\x06\x13Qa\x07\"q\x142\x81\x91\xa1"
+            b"\x08#B\xb1\xc1\x15R\xd1\xf0$3br\x82\t\n\x16\x17\x18\x19\x1a%&'()*456789:CDEFGHIJSTUVWXYZcdefghijstuvwxyz"
+            b"\x83\x84\x85\x86\x87\x88\x89\x8a\x92\x93\x94\x95\x96\x97\x98\x99\x9a\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca"
+            b"\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa"
+            b"\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xfb\xd3@\x00\xff\xd9"
+        )
+
+        with patch("scripts.mail_manager.attachment_parser.image_parser.LLMClient") as mock_llm_class:
+            mock_llm = MagicMock()
+            mock_llm_class.return_value = mock_llm
+            mock_response = MagicMock()
+            mock_response.content = "This is a test image description."
+            mock_llm.chat.return_value = mock_response
+
+            text = parser.extract_text(test_file)
+
+            # Verify LLM client was called with vision API message structure
+            mock_llm.chat.assert_called_once()
+            call_args = mock_llm.chat.call_args
+            messages = call_args[0][0]
+            assert len(messages) == 1
+            assert messages[0]["role"] == "user"
+            # Check content is a list with text and image_url
+            content = messages[0]["content"]
+            assert isinstance(content, list)
+            assert len(content) == 2
+            assert content[0]["type"] == "text"
+            assert content[1]["type"] == "image_url"
+            assert "url" in content[1]["image_url"]
+            assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+            assert "This is a test image description." in text
+
+    def test_extract_text_returns_description_from_vision_model(self, tmp_path: Path) -> None:
+        """ImageParser.extract_text() returns description from vision model."""
+        from scripts.mail_manager.attachment_parser.image_parser import ImageParser
+
+        parser = ImageParser()
+        test_file = tmp_path / "test.png"
+        # Create a minimal PNG (1x1 red pixel)
+        test_file.write_bytes(
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+            b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0"
+            b"\x00\x00\x00\x03\x00\x01\x00\x18\xdd\x8d\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+
+        with patch("scripts.mail_manager.attachment_parser.image_parser.LLMClient") as mock_llm_class:
+            mock_llm = MagicMock()
+            mock_llm_class.return_value = mock_llm
+            mock_response = MagicMock()
+            mock_response.content = "A screenshot showing a document with text."
+            mock_llm.chat.return_value = mock_response
+
+            text = parser.extract_text(test_file)
+
+            assert text == "A screenshot showing a document with text."
+
+    def test_extract_metadata_returns_image_type(self, tmp_path: Path) -> None:
+        """ImageParser.extract_metadata() returns image type and size."""
+        from scripts.mail_manager.attachment_parser.image_parser import ImageParser
+
+        parser = ImageParser()
+        test_file = tmp_path / "test.gif"
+        # Create a minimal GIF (1x1 red pixel)
+        test_file.write_bytes(
+            b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\x00\x00\x00\x00\x00,"
+            b"\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+        )
+
+        metadata = parser.extract_metadata(test_file)
+
+        assert metadata["type"] == "image"
+        assert metadata["format"] == "gif"
+        assert "size_bytes" in metadata

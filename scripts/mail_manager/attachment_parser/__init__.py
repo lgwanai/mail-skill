@@ -2,30 +2,36 @@
 Attachment parser module for document content extraction.
 
 Provides a unified interface for parsing various document types
-(PDF, Excel, PowerPoint, text/markdown) using a protocol-based
+(PDF, Excel, PowerPoint, text/markdown, images) using a protocol-based
 architecture.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from scripts.mail_manager.attachment_parser.base import DocumentParser, ParseResult
 from scripts.mail_manager.attachment_parser.excel_parser import ExcelParser
+from scripts.mail_manager.attachment_parser.image_parser import ImageParser
 from scripts.mail_manager.attachment_parser.pdf_parser import PDFParser
 from scripts.mail_manager.attachment_parser.pptx_parser import PPTXParser
 from scripts.mail_manager.attachment_parser.text_parser import TextParser
+
+if TYPE_CHECKING:
+    from scripts.mail_manager.llm.client import LLMClient
 
 __all__ = [
     "DocumentParser",
     "ParseResult",
     "parse_attachment",
     "get_parser",
+    "parse_and_store_attachment",
     "PDFParser",
     "ExcelParser",
     "PPTXParser",
     "TextParser",
+    "ImageParser",
 ]
 
 # Parser registry: maps file extensions to parser classes
@@ -36,6 +42,10 @@ _PARSER_REGISTRY: dict[str, type[DocumentParser]] = {
     ".pptx": PPTXParser,
     ".txt": TextParser,
     ".md": TextParser,
+    ".jpg": ImageParser,
+    ".jpeg": ImageParser,
+    ".png": ImageParser,
+    ".gif": ImageParser,
 }
 
 
