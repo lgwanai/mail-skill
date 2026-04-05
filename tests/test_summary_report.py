@@ -216,6 +216,37 @@ class TestGroupEmailsBySender:
         assert group[2]["subject"] == "Email 3"
 
 
+class TestEmailSummaryPrompt:
+    """Tests for EMAIL_SUMMARY_PROMPT constant."""
+
+    def test_prompt_exists(self) -> None:
+        """Test EMAIL_SUMMARY_PROMPT exists in prompts module."""
+        from mail_manager.llm.prompts import EMAIL_SUMMARY_PROMPT
+
+        assert EMAIL_SUMMARY_PROMPT is not None
+        assert isinstance(EMAIL_SUMMARY_PROMPT, str)
+
+    def test_prompt_contains_placeholders(self) -> None:
+        """Test prompt has placeholders for email fields."""
+        from mail_manager.llm.prompts import EMAIL_SUMMARY_PROMPT
+
+        assert "{sender}" in EMAIL_SUMMARY_PROMPT
+        assert "{subject}" in EMAIL_SUMMARY_PROMPT
+        assert "{date}" in EMAIL_SUMMARY_PROMPT
+        assert "{body}" in EMAIL_SUMMARY_PROMPT
+
+    def test_prompt_requests_json_output(self) -> None:
+        """Test prompt requests JSON formatted output."""
+        from mail_manager.llm.prompts import EMAIL_SUMMARY_PROMPT
+
+        # Should request JSON format with expected keys
+        assert "key_points" in EMAIL_SUMMARY_PROMPT
+        assert "action_items" in EMAIL_SUMMARY_PROMPT
+        assert "deadline" in EMAIL_SUMMARY_PROMPT
+        assert "priority" in EMAIL_SUMMARY_PROMPT
+        assert "one_liner" in EMAIL_SUMMARY_PROMPT
+
+
 class TestSummarizeEmail:
     """Tests for summarize_email function (SUMMARY-02)."""
 
