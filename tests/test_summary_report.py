@@ -328,8 +328,10 @@ class TestSummarizeEmail:
         mock_llm.chat.assert_called_once()
         # Check that the prompt was formatted with email details
         call_args = mock_llm.chat.call_args
-        assert len(call_args[0][0]) == 1  # One message
-        assert "alice@example.com" in call_args[0][0][0]["content"]
+        # Access via kwargs since implementation uses messages= keyword arg
+        messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else [])
+        assert len(messages) == 1  # One message
+        assert "alice@example.com" in messages[0]["content"]
 
     def test_summary_handles_empty_body(self) -> None:
         """Test summarize_email handles emails with empty body."""
@@ -419,7 +421,9 @@ class TestSummarizeEmail:
         summarize_email(mock_llm, email)
         # Verify the body was truncated in the prompt
         call_args = mock_llm.chat.call_args
-        prompt_content = call_args[0][0][0]["content"]
+        # Access via kwargs since implementation uses messages= keyword arg
+        messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else [])
+        prompt_content = messages[0]["content"]
         assert len(prompt_content) < 3500  # Should be truncated
 
 
