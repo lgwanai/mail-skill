@@ -1,0 +1,108 @@
+"""LLM client abstraction for all AI-powered features.
+
+Provides a thin wrapper around OpenAI SDK for consistent interface and easy testing.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from typing import Any
+
+from openai import APIError, OpenAI, RateLimitError
+
+from mail_manager.errors import MailSkillError
+
+
+@dataclass
+class LLMResponse:
+    """Standard LLM response structure."""
+
+    content: str
+    model: str
+    usage: dict[str, int]
+    finish_reason: str
+
+
+class LLMClient:
+    """Thin wrapper around OpenAI SDK for LLM operations."""
+
+    def __init__(self) -> None:
+        """Initialize LLM client with environment configuration.
+
+        Uses environment variables:
+        - OPENAI_API_KEY: Required for API access
+        - OPENAI_API_BASE: Optional, for custom endpoints
+        - LLM_MODEL_NAME: Model for chat completions (default: gpt-4o-mini)
+        - LLM_TIMEOUT: Request timeout in seconds (default: 30)
+        """
+        api_key = os.getenv("OPENAI_API_KEY")
+        api_base = os.getenv("OPENAI_API_BASE")
+        timeout = int(os.getenv("LLM_TIMEOUT", "30"))
+
+        self.client = OpenAI(api_key=api_key, base_url=api_base, timeout=timeout)
+        self.model = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
+
+    def chat(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 2000,
+    ) -> LLMResponse:
+        """Send chat completion request.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'.
+            temperature: Sampling temperature (0.0 to 2.0).
+            max_tokens: Maximum tokens in response.
+
+        Returns:
+            LLMResponse with content, model, usage, and finish_reason.
+
+        Raises:
+            MailSkillError: If API call fails.
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return LLMResponse(
+                content=response.choices[0].message.content or "",
+                model=response.model,
+                usage={
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                },
+                finish_reason=response.choices[0].finish_reason,
+            )
+        except (APIError, RateLimitError) as e:
+            raise MailSkillError(f"LLM API error: {e}") from e
+
+    def chat_with_history(
+        self,
+        system_prompt: str,
+        conversation: list[dict[str, str]],
+        user_message: str,
+        temperature: float = 0.7,
+        max_tokens: int = 2000,
+    ) -> LLMResponse:
+        """Chat with conversation history context.
+
+        Args:
+            system_prompt: System prompt to set behavior.
+            conversation: List of prior messages with 'role' and 'content'.
+            user_message: Current user message.
+            temperature: Sampling temperature (0.0 to 2.0).
+            max_tokens: Maximum tokens in response.
+
+        Returns:
+            LLMResponse with content, model, usage, and finish_reason.
+        """
+        messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+        messages.extend(conversation)
+        messages.append({"role": "user", "content": user_message})
+        return self.chat(messages, temperature=temperature, max_tokens=max_tokens)

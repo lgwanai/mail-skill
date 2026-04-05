@@ -209,9 +209,10 @@ class TestLLMClientErrorHandling:
     """Tests for LLMClient error handling."""
 
     def test_error_handling_api_failure(self) -> None:
-        """Test error handling for API failures."""
+        """Test error handling for API failures wraps in MailSkillError."""
         from scripts.mail_manager.llm.client import LLMClient
 
+        from mail_manager.errors import MailSkillError
         from openai import APIError
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
@@ -228,13 +229,16 @@ class TestLLMClientErrorHandling:
 
                 llm = LLMClient()
 
-                with pytest.raises(APIError):
+                with pytest.raises(MailSkillError) as exc_info:
                     llm.chat([{"role": "user", "content": "Hello"}])
 
+                assert "LLM API error" in str(exc_info.value)
+
     def test_error_handling_rate_limit(self) -> None:
-        """Test error handling for rate limit errors."""
+        """Test error handling for rate limit errors wraps in MailSkillError."""
         from scripts.mail_manager.llm.client import LLMClient
 
+        from mail_manager.errors import MailSkillError
         from openai import RateLimitError
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
@@ -250,8 +254,10 @@ class TestLLMClientErrorHandling:
 
                 llm = LLMClient()
 
-                with pytest.raises(RateLimitError):
+                with pytest.raises(MailSkillError) as exc_info:
                     llm.chat([{"role": "user", "content": "Hello"}])
+
+                assert "LLM API error" in str(exc_info.value)
 
 
 class TestLLMClientTimeout:
@@ -284,3 +290,35 @@ class TestLLMClientTimeout:
 
                 # Check timeout was configured (implementation detail)
                 assert llm.client is not None
+
+
+class TestPromptTemplates:
+    """Tests for prompt templates module."""
+
+    def test_thread_summary_prompt_exists(self) -> None:
+        """THREAD_SUMMARY_PROMPT exists and is non-empty."""
+        from scripts.mail_manager.llm.prompts import THREAD_SUMMARY_PROMPT
+
+        assert isinstance(THREAD_SUMMARY_PROMPT, str)
+        assert len(THREAD_SUMMARY_PROMPT) > 10
+
+    def test_reply_system_prompt_exists(self) -> None:
+        """REPLY_SYSTEM_PROMPT exists and is non-empty."""
+        from scripts.mail_manager.llm.prompts import REPLY_SYSTEM_PROMPT
+
+        assert isinstance(REPLY_SYSTEM_PROMPT, str)
+        assert len(REPLY_SYSTEM_PROMPT) > 10
+
+    def test_attachment_summary_prompt_exists(self) -> None:
+        """ATTACHMENT_SUMMARY_PROMPT exists and is non-empty."""
+        from scripts.mail_manager.llm.prompts import ATTACHMENT_SUMMARY_PROMPT
+
+        assert isinstance(ATTACHMENT_SUMMARY_PROMPT, str)
+        assert len(ATTACHMENT_SUMMARY_PROMPT) > 10
+
+    def test_image_description_prompt_exists(self) -> None:
+        """IMAGE_DESCRIPTION_PROMPT exists and is non-empty."""
+        from scripts.mail_manager.llm.prompts import IMAGE_DESCRIPTION_PROMPT
+
+        assert isinstance(IMAGE_DESCRIPTION_PROMPT, str)
+        assert len(IMAGE_DESCRIPTION_PROMPT) > 10
