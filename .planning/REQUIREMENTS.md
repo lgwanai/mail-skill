@@ -64,7 +64,7 @@
 
 - [x] **SUMMARY-01**: 按发件人维度分组邮件，支持收件人和时间范围筛选
 - [x] **SUMMARY-02**: 每封邮件生成结构化摘要（关键点、行动项、截止日期、优先级）
-- [ ] **SUMMARY-03**: 生成总体总结，汇总关键主题和待办事项
+- [x] **SUMMARY-03**: 生成总体总结，汇总关键主题和待办事项
 - [ ] **SUMMARY-04**: 格式化输出为易读的 Markdown 报告，支持导出
 
 ## v2 Requirements (Deferred)
@@ -137,7 +137,7 @@
 | ATTACH-AI-02 | Phase 6 | Complete |
 | SUMMARY-01 | Phase 7 | Complete |
 | SUMMARY-02 | Phase 7 | Complete |
-| SUMMARY-03 | Phase 7 | Pending |
+| SUMMARY-03 | Phase 7 | Complete |
 | SUMMARY-04 | Phase 7 | Pending |
 
 **Coverage:**
