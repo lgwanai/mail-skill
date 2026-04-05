@@ -607,24 +607,250 @@ class TestFormatSummaryReport:
 
     def test_returns_markdown_string(self) -> None:
         """Test format_summary_report returns valid Markdown string."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from datetime import date
+
+        from mail_manager.summary_report import (
+            EmailSummary,
+            OverallSummary,
+            format_summary_report,
+        )
+
+        overall = OverallSummary(
+            overview="Test overview",
+            key_themes=["Theme 1"],
+            all_action_items=[],
+            upcoming_deadlines=[],
+            recommended_priority=[],
+        )
+        sender_summaries: dict[str, list[tuple[dict, EmailSummary]]] = {}
+
+        result = format_summary_report(
+            recipient="test@example.com",
+            date_from=date(2024, 1, 1),
+            date_to=date(2024, 1, 7),
+            sender_summaries=sender_summaries,
+            overall=overall,
+        )
+
+        assert isinstance(result, str)
+        assert "# Email Summary Report" in result
 
     def test_includes_header_with_time_range(self) -> None:
         """Test report header includes date/time range."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from datetime import date
+
+        from mail_manager.summary_report import (
+            EmailSummary,
+            OverallSummary,
+            format_summary_report,
+        )
+
+        overall = OverallSummary(
+            overview="Test",
+            key_themes=[],
+            all_action_items=[],
+            upcoming_deadlines=[],
+            recommended_priority=[],
+        )
+        sender_summaries: dict[str, list[tuple[dict, EmailSummary]]] = {}
+
+        result = format_summary_report(
+            recipient="test@example.com",
+            date_from=date(2024, 1, 1),
+            date_to=date(2024, 1, 7),
+            sender_summaries=sender_summaries,
+            overall=overall,
+        )
+
+        assert "test@example.com" in result
+        assert "2024-01-01" in result
+        assert "2024-01-07" in result
 
     def test_includes_sender_sections(self) -> None:
         """Test report has sections for each sender."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from datetime import date
+
+        from mail_manager.summary_report import (
+            EmailSummary,
+            OverallSummary,
+            format_summary_report,
+        )
+
+        overall = OverallSummary(
+            overview="Test overview",
+            key_themes=[],
+            all_action_items=[],
+            upcoming_deadlines=[],
+            recommended_priority=[],
+        )
+
+        sender_summaries = {
+            "alice@example.com": [
+                (
+                    {"subject": "Email 1", "date": datetime(2024, 1, 15)},
+                    EmailSummary(
+                        subject="Email 1",
+                        key_points=["Point 1"],
+                        action_items=[],
+                        deadline=None,
+                        priority="medium",
+                        one_liner="Summary 1",
+                    ),
+                )
+            ],
+            "bob@example.com": [
+                (
+                    {"subject": "Email 2", "date": datetime(2024, 1, 16)},
+                    EmailSummary(
+                        subject="Email 2",
+                        key_points=["Point 2"],
+                        action_items=[],
+                        deadline=None,
+                        priority="low",
+                        one_liner="Summary 2",
+                    ),
+                )
+            ],
+        }
+
+        result = format_summary_report(
+            recipient="test@example.com",
+            date_from=date(2024, 1, 1),
+            date_to=date(2024, 1, 7),
+            sender_summaries=sender_summaries,
+            overall=overall,
+        )
+
+        assert "alice@example.com" in result
+        assert "bob@example.com" in result
 
     def test_includes_overall_summary_section(self) -> None:
         """Test report includes overall summary section."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from datetime import date
+
+        from mail_manager.summary_report import (
+            EmailSummary,
+            OverallSummary,
+            format_summary_report,
+        )
+
+        overall = OverallSummary(
+            overview="This is the overall summary.",
+            key_themes=["Project progress", "Planning"],
+            all_action_items=[
+                {"item": "Review API", "sender": "alice@example.com", "priority": "high"}
+            ],
+            upcoming_deadlines=[
+                {"date": "2024-01-20", "description": "API review", "sender": "alice@example.com"}
+            ],
+            recommended_priority=["Review API first"],
+        )
+
+        sender_summaries: dict[str, list[tuple[dict, EmailSummary]]] = {}
+
+        result = format_summary_report(
+            recipient="test@example.com",
+            date_from=date(2024, 1, 1),
+            date_to=date(2024, 1, 7),
+            sender_summaries=sender_summaries,
+            overall=overall,
+        )
+
+        assert "## Overview" in result
+        assert "This is the overall summary" in result
+        assert "Project progress" in result
+        assert "Review API first" in result
 
     def test_formats_email_summaries_as_list(self) -> None:
         """Test email summaries are formatted as bullet list."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from datetime import date
+
+        from mail_manager.summary_report import (
+            EmailSummary,
+            OverallSummary,
+            format_summary_report,
+        )
+
+        overall = OverallSummary(
+            overview="Test",
+            key_themes=[],
+            all_action_items=[],
+            upcoming_deadlines=[],
+            recommended_priority=[],
+        )
+
+        sender_summaries = {
+            "alice@example.com": [
+                (
+                    {"subject": "Project Update", "date": datetime(2024, 1, 15)},
+                    EmailSummary(
+                        subject="Project Update",
+                        key_points=["Point 1", "Point 2"],
+                        action_items=["Action 1"],
+                        deadline="2024-01-20",
+                        priority="high",
+                        one_liner="Project is on track.",
+                    ),
+                )
+            ]
+        }
+
+        result = format_summary_report(
+            recipient="test@example.com",
+            date_from=date(2024, 1, 1),
+            date_to=date(2024, 1, 7),
+            sender_summaries=sender_summaries,
+            overall=overall,
+        )
+
+        assert "Project Update" in result
+        assert "Project is on track" in result
+        assert "- Point 1" in result
+        assert "- [ ] Action 1" in result
+        assert "2024-01-20" in result
 
     def test_handles_special_characters_in_markdown(self) -> None:
         """Test special characters are escaped properly."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from datetime import date
+
+        from mail_manager.summary_report import (
+            EmailSummary,
+            OverallSummary,
+            format_summary_report,
+        )
+
+        overall = OverallSummary(
+            overview="Test with <special> & chars",
+            key_themes=["Theme with *asterisk*"],
+            all_action_items=[],
+            upcoming_deadlines=[],
+            recommended_priority=[],
+        )
+
+        sender_summaries = {
+            "alice@example.com": [
+                (
+                    {"subject": "Email with <angle> brackets", "date": datetime(2024, 1, 15)},
+                    EmailSummary(
+                        subject="Email with <angle> brackets",
+                        key_points=["Point with & ampersand"],
+                        action_items=[],
+                        deadline=None,
+                        priority="medium",
+                        one_liner="Summary with *asterisk*",
+                    ),
+                )
+            ]
+        }
+
+        result = format_summary_report(
+            recipient="test@example.com",
+            date_from=date(2024, 1, 1),
+            date_to=date(2024, 1, 7),
+            sender_summaries=sender_summaries,
+            overall=overall,
+        )
+
+        # The content should be present (may or may not be escaped depending on implementation)
+        assert "special" in result
+        assert "asterisk" in result

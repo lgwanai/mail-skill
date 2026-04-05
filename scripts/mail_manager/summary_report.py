@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from itertools import groupby
 from typing import TYPE_CHECKING, Any
 
@@ -270,3 +271,147 @@ def generate_overall_summary(
         upcoming_deadlines=data.get("upcoming_deadlines", []),
         recommended_priority=data.get("recommended_priority", []),
     )
+
+
+def format_summary_report(
+    recipient: str,
+    date_from: date,
+    date_to: date,
+    sender_summaries: dict[str, list[tuple[dict[str, Any], EmailSummary]]],
+    overall: OverallSummary,
+) -> str:
+    """Format complete summary report as Markdown.
+
+    Args:
+        recipient: Email address of the recipient.
+        date_from: Report start date.
+        date_to: Report end date.
+        sender_summaries: Dict mapping sender to list of (email, EmailSummary) tuples.
+        overall: OverallSummary object with aggregated information.
+
+    Returns:
+        Markdown-formatted report string.
+
+    Example:
+        >>> report = format_summary_report(
+        ...     recipient="user@example.com",
+        ...     date_from=date(2024, 1, 1),
+        ...     date_to=date(2024, 1, 7),
+        ...     sender_summaries={},
+        ...     overall=OverallSummary(overview="No emails"),
+        ... )
+        >>> "# Email Summary Report" in report
+        True
+    """
+    sections: list[str] = []
+
+    # Header
+    sections.append("# Email Summary Report")
+    sections.append("")
+    sections.append(f"**Recipient:** {recipient}")
+    sections.append(f"**Period:** {date_from} to {date_to}")
+    sections.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    sections.append("")
+
+    # Overview section
+    sections.append("## Overview")
+    sections.append("")
+    sections.append(overall.overview)
+    sections.append("")
+
+    # Key themes
+    if overall.key_themes:
+        sections.append("### Key Themes")
+        for theme in overall.key_themes:
+            sections.append(f"- {theme}")
+        sections.append("")
+
+    # Recommended priority
+    if overall.recommended_priority:
+        sections.append("### Recommended Priority")
+        for i, item in enumerate(overall.recommended_priority, 1):
+            sections.append(f"{i}. {item}")
+        sections.append("")
+
+    # All action items
+    if overall.all_action_items:
+        sections.append("## All Action Items")
+        sections.append("")
+        sections.append("| Priority | Action | Sender |")
+        sections.append("|----------|--------|--------|")
+        for item in sorted(
+            overall.all_action_items,
+            key=lambda x: {"high": 0, "medium": 1, "low": 2}.get(x.get("priority", "medium"), 1),
+        ):
+            sections.append(
+                f"| {item.get('priority', 'medium').upper()} | {item.get('item', '')} | {item.get('sender', '')} |"
+            )
+        sections.append("")
+
+    # Upcoming deadlines
+    if overall.upcoming_deadlines:
+        sections.append("## Upcoming Deadlines")
+        sections.append("")
+        sections.append("| Date | Description | Sender |")
+        sections.append("|------|-------------|--------|")
+        for dl in sorted(overall.upcoming_deadlines, key=lambda x: x.get("date", "")):
+            sections.append(
+                f"| {dl.get('date', '')} | {dl.get('description', '')} | {dl.get('sender', '')} |"
+            )
+        sections.append("")
+
+    # Per-sender sections
+    sections.append("## Emails by Sender")
+    sections.append("")
+
+    total_emails = sum(len(emails) for emails in sender_summaries.values())
+    sections.append(f"*Total emails: {total_emails} from {len(sender_summaries)} senders*")
+    sections.append("")
+
+    for sender, email_summaries in sender_summaries.items():
+        sections.append(f"### {sender}")
+        sections.append("")
+
+        for email, summary in email_summaries:
+            # Email header
+            subject = email.get("subject", "No Subject")
+            email_date = email.get("date")
+            if isinstance(email_date, datetime):
+                date_str = email_date.strftime("%Y-%m-%d")
+            elif email_date:
+                date_str = str(email_date)[:10]
+            else:
+                date_str = "Unknown"
+
+            sections.append(f"#### {subject}")
+            sections.append(f"*Date: {date_str}*")
+            sections.append("")
+
+            # One-liner
+            if summary.one_liner:
+                sections.append(f"> {summary.one_liner}")
+                sections.append("")
+
+            # Key points
+            if summary.key_points:
+                sections.append("**Key Points:**")
+                for point in summary.key_points:
+                    sections.append(f"- {point}")
+                sections.append("")
+
+            # Action items
+            if summary.action_items:
+                sections.append("**Action Items:**")
+                for action in summary.action_items:
+                    sections.append(f"- [ ] {action}")
+                sections.append("")
+
+            # Deadline
+            if summary.deadline:
+                sections.append(f"**Deadline:** {summary.deadline}")
+                sections.append("")
+
+            sections.append("---")
+            sections.append("")
+
+    return "\n".join(sections)
