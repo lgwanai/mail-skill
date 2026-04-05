@@ -1329,31 +1329,38 @@ def cmd_summarize(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
 
 
 def cmd_thread(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
-    """Display email thread timeline."""
+    """Display email thread timeline with enhanced sender/recipient matching."""
+    from mail_manager.thread_manager import get_enhanced_thread_timeline, format_thread_view
+
     client = get_client(config, getattr(args, "account", None))
     paths = _get_account_paths(config, client.email)
     isolated_db = MailDatabase(paths["db_path"])
-    timeline = isolated_db.get_thread_timeline(args.message_id, limit=200)
+
+    # Use enhanced thread timeline with sender/recipient matching
+    timeline = get_enhanced_thread_timeline(
+        db=isolated_db,
+        seed_message_id=args.message_id,
+        include_sender_thread=True,
+    )
     if not timeline:
         print("未找到关联邮件线程。")
         return
-    rows = []
-    for e in timeline:
-        rows.append(
-            {
-                "sender": e.get("sender", ""),
-                "recipient": e.get("recipient", ""),
-                "cc": e.get("cc", ""),
-                "date": e.get("date", ""),
-                "subject": e.get("subject", ""),
-                "snippet": (e.get("body_text", "") or "")[:200]
-                .replace("\n", " ")
-                .replace("\r", ""),
-                "attachments": [att.get("local_path") for att in e.get("attachments", [])],
-            }
+
+    # Use enhanced thread view formatting
+    if getattr(args, "summary", False):
+        from mail_manager.llm.client import LLMClient
+        llm_client = LLMClient()
+        output = format_thread_view(
+            timeline=timeline,
+            current_message_id=args.message_id,
+            llm_client=llm_client,
         )
-    table_md = _render_table("thread.md.j2", {"rows": rows})
-    print(table_md)
+    else:
+        output = format_thread_view(
+            timeline=timeline,
+            current_message_id=args.message_id,
+        )
+    print(output)
 
 
 def cmd_batch_mark(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
@@ -1886,11 +1893,11 @@ def cmd_ai_reply(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
             # Store positive feedback
             store_reply_feedback(
                 db=db,
-                message_id=args.message_id,
-                original_email_sender=email.get("sender", ""),
-                reply_content=reply,
-                feedback_type="positive",
-                user_edited_content=final_reply if final_reply != reply else None,
+                original_message_id=args.message_id,
+                original_email=str(email),
+                suggested_reply=reply,
+                user_edited_reply=final_reply if final_reply != reply else None,
+                is_positive=True,
             )
         except Exception as e:
             print(f"Failed to send: {e}")
@@ -1898,10 +1905,10 @@ def cmd_ai_reply(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
         # Store negative feedback if user rejected
         store_reply_feedback(
             db=db,
-            message_id=args.message_id,
-            original_email_sender=email.get("sender", ""),
-            reply_content=reply,
-            feedback_type="negative",
+            original_message_id=args.message_id,
+            original_email=str(email),
+            suggested_reply=reply,
+            is_positive=False,
         )
         print("Reply cancelled.")
 
@@ -2056,6 +2063,7 @@ def main():
     thread_p = subparsers.add_parser("thread", help="Show email thread timeline as a table")
     thread_p.add_argument("message_id", help="Seed message_id to build the thread")
     thread_p.add_argument("--account", help="Account to read from")
+    thread_p.add_argument("--summary", action="store_true", help="Generate LLM summary of thread")
 
     # rebuild-index
     rebuild_p = subparsers.add_parser(
