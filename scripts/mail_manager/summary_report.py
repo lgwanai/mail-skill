@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from mail_manager.llm.client import LLMClient
 
-from mail_manager.llm.prompts import EMAIL_SUMMARY_PROMPT
+from mail_manager.llm.prompts import EMAIL_SUMMARY_PROMPT, OVERALL_SUMMARY_PROMPT
 
 
 @dataclass
@@ -39,6 +39,30 @@ class EmailSummary:
     deadline: str | None = None
     priority: str = "medium"
     one_liner: str = ""
+
+
+@dataclass
+class OverallSummary:
+    """Overall summary aggregating all email summaries.
+
+    Holds consolidated information from all individual email summaries
+    for reporting purposes.
+
+    Attributes:
+        overview: 2-3 sentence overview of all emails.
+        key_themes: List of main themes identified across emails.
+        all_action_items: List of action items with sender attribution.
+            Each item is a dict with 'item', 'sender', and 'priority' keys.
+        upcoming_deadlines: List of deadlines sorted by date.
+            Each item is a dict with 'date', 'description', and 'sender' keys.
+        recommended_priority: List of top 3 items to prioritize.
+    """
+
+    overview: str = ""
+    key_themes: list[str] = field(default_factory=list)
+    all_action_items: list[dict[str, str]] = field(default_factory=list)
+    upcoming_deadlines: list[dict[str, str]] = field(default_factory=list)
+    recommended_priority: list[str] = field(default_factory=list)
 
 
 def group_emails_by_sender(emails: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -164,4 +188,85 @@ def summarize_email(llm_client: LLMClient, email: dict[str, Any]) -> EmailSummar
         deadline=data.get("deadline"),
         priority=data.get("priority", "medium"),
         one_liner=data.get("one_liner", ""),
+    )
+
+
+def generate_overall_summary(
+    llm_client: LLMClient,
+    sender_summaries: dict[str, list[EmailSummary]],
+) -> OverallSummary:
+    """Generate overall summary from sender-grouped summaries.
+
+    Aggregates all individual email summaries into a consolidated overview
+    with key themes, action items, deadlines, and priority recommendations.
+
+    Args:
+        llm_client: LLM client for making chat completion requests.
+        sender_summaries: Dict mapping sender email to their list of EmailSummary.
+
+    Returns:
+        OverallSummary with consolidated information. Returns fallback values
+        on JSON parsing errors.
+
+    Example:
+        >>> from mail_manager.llm.client import LLMClient
+        >>> llm = LLMClient()
+        >>> summaries = {"alice@example.com": [EmailSummary(subject="Test", ...)]}
+        >>> overall = generate_overall_summary(llm, summaries)
+        >>> overall.overview
+        'Summary of all emails...'
+    """
+    # Format sender summaries for prompt
+    summaries_text: list[str] = []
+    for sender, summaries in sender_summaries.items():
+        summaries_text.append(f"\n### Sender: {sender}")
+        for i, s in enumerate(summaries, 1):
+            summaries_text.append(f"\n{i}. {s.subject}")
+            summaries_text.append(f"   Summary: {s.one_liner}")
+            if s.action_items:
+                summaries_text.append(f"   Actions: {', '.join(s.action_items)}")
+            if s.deadline:
+                summaries_text.append(f"   Deadline: {s.deadline}")
+
+    # Format the prompt
+    prompt = OVERALL_SUMMARY_PROMPT.format(
+        sender_summaries="\n".join(summaries_text),
+    )
+
+    # Call LLM with low temperature for consistent JSON output
+    response = llm_client.chat(
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+        max_tokens=1000,
+    )
+
+    # Parse JSON from response, handling markdown code blocks
+    content = response.content.strip()
+
+    # Remove markdown code block wrapper if present
+    if content.startswith("```"):
+        # Match ```json or just ``` at start and ``` at end
+        content = re.sub(r"^```(?:json)?\s*\n?", "", content)
+        content = re.sub(r"\n?```\s*$", "", content)
+        content = content.strip()
+
+    # Parse JSON with fallback values
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        # Return fallback summary on parse error
+        return OverallSummary(
+            overview="",
+            key_themes=[],
+            all_action_items=[],
+            upcoming_deadlines=[],
+            recommended_priority=[],
+        )
+
+    return OverallSummary(
+        overview=data.get("overview", ""),
+        key_themes=data.get("key_themes", []),
+        all_action_items=data.get("all_action_items", []),
+        upcoming_deadlines=data.get("upcoming_deadlines", []),
+        recommended_priority=data.get("recommended_priority", []),
     )
