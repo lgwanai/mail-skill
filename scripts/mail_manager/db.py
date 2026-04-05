@@ -157,6 +157,22 @@ class MailDatabase:
             if "content_text" not in att_columns:
                 cursor.execute("ALTER TABLE attachments ADD COLUMN content_text TEXT")
 
+            # Reply feedback table for AI reply learning
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS reply_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    original_message_id TEXT,
+                    original_email TEXT,
+                    suggested_reply TEXT,
+                    user_edited_reply TEXT,
+                    is_positive BOOLEAN DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_feedback_positive ON reply_feedback(is_positive)"
+            )
+
             # Create FTS5 virtual table for full-text search
             try:
                 cursor.execute("""
@@ -982,3 +998,81 @@ class MailDatabase:
             )
             row = cursor.fetchone()
             return row["content_text"] if row and row["content_text"] else None
+
+    # Reply feedback storage methods
+
+    def save_reply_feedback(
+        self,
+        original_message_id: str,
+        original_email: str,
+        suggested_reply: str,
+        user_edited_reply: str | None = None,
+        is_positive: bool = True,
+    ) -> None:
+        """Store feedback for AI reply learning.
+
+        Args:
+            original_message_id: Message ID of the original email.
+            original_email: Content of the original email.
+            suggested_reply: The AI-suggested reply.
+            user_edited_reply: User's edited version of the reply (optional).
+            is_positive: Whether the feedback is positive (default True).
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO reply_feedback (
+                    original_message_id, original_email, suggested_reply,
+                    user_edited_reply, is_positive
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    original_message_id,
+                    original_email,
+                    suggested_reply,
+                    user_edited_reply,
+                    is_positive,
+                ),
+            )
+            conn.commit()
+
+    def get_reply_feedback(
+        self,
+        limit: int = 50,
+        positive_only: bool = True,
+    ) -> list[dict]:
+        """Retrieve feedback examples for few-shot learning.
+
+        Args:
+            limit: Maximum number of feedback entries to return.
+            positive_only: If True, only return positive feedback.
+
+        Returns:
+            List of feedback dictionaries with keys:
+            id, original_message_id, original_email, suggested_reply,
+            user_edited_reply, is_positive, created_at
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if positive_only:
+                cursor.execute(
+                    """
+                    SELECT * FROM reply_feedback
+                    WHERE is_positive = 1
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT * FROM reply_feedback
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                )
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]

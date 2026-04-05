@@ -726,6 +726,99 @@ class TestBatchTagOperations:
         assert count == 0
 
 
+class TestReplyFeedbackStorage:
+    """Tests for reply feedback storage methods."""
+
+    @pytest.fixture
+    def db(self, temp_db_path, mock_chroma_collection):
+        """Create a MailDatabase instance for testing."""
+        return MailDatabase(temp_db_path)
+
+    def test_reply_feedback_table_exists(self, db):
+        """Test that reply_feedback table is created."""
+        import sqlite3
+
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='reply_feedback'")
+        result = cursor.fetchone()
+        conn.close()
+        assert result is not None
+
+    def test_reply_feedback_index_exists(self, db):
+        """Test that index for is_positive column is created."""
+        import sqlite3
+
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        indexes = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        assert "idx_feedback_positive" in indexes
+
+    def test_save_reply_feedback_stores_data(self, db):
+        """Test save_reply_feedback stores feedback with original/reply data."""
+        db.save_reply_feedback(
+            original_message_id="msg-123@example.com",
+            original_email="From: alice@example.com\nSubject: Test\n\nHello",
+            suggested_reply="Thank you for your email.",
+            user_edited_reply=None,
+            is_positive=True,
+        )
+
+        feedback = db.get_reply_feedback(limit=10, positive_only=False)
+        assert len(feedback) == 1
+        assert feedback[0]["original_message_id"] == "msg-123@example.com"
+        assert feedback[0]["is_positive"] in (True, 1)
+
+    def test_get_reply_feedback_positive_only(self, db):
+        """Test get_reply_feedback retrieves only positive examples when filtered."""
+        # Save positive feedback
+        db.save_reply_feedback(
+            original_message_id="msg-pos@example.com",
+            original_email="From: alice@example.com\nSubject: Test",
+            suggested_reply="Great reply",
+            is_positive=True,
+        )
+        # Save negative feedback
+        db.save_reply_feedback(
+            original_message_id="msg-neg@example.com",
+            original_email="From: bob@example.com\nSubject: Test",
+            suggested_reply="Bad reply",
+            is_positive=False,
+        )
+
+        positive = db.get_reply_feedback(limit=10, positive_only=True)
+        assert len(positive) == 1
+        assert positive[0]["original_message_id"] == "msg-pos@example.com"
+
+    def test_get_reply_feedback_limit(self, db):
+        """Test get_reply_feedback respects limit parameter."""
+        for i in range(10):
+            db.save_reply_feedback(
+                original_message_id=f"msg-{i}@example.com",
+                original_email=f"Email {i}",
+                suggested_reply=f"Reply {i}",
+                is_positive=True,
+            )
+
+        feedback = db.get_reply_feedback(limit=3, positive_only=True)
+        assert len(feedback) == 3
+
+    def test_save_reply_feedback_with_edited_reply(self, db):
+        """Test save_reply_feedback stores user-edited reply."""
+        db.save_reply_feedback(
+            original_message_id="msg-edited@example.com",
+            original_email="Original email content",
+            suggested_reply="Suggested reply",
+            user_edited_reply="User edited this reply",
+            is_positive=True,
+        )
+
+        feedback = db.get_reply_feedback(limit=10, positive_only=False)
+        assert feedback[0]["user_edited_reply"] == "User edited this reply"
+
+
 class TestAttachmentContentStorage:
     """Tests for attachment content storage methods."""
 
