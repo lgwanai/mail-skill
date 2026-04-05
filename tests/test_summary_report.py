@@ -252,23 +252,175 @@ class TestSummarizeEmail:
 
     def test_returns_email_summary_dataclass(self) -> None:
         """Test summarize_email returns EmailSummary dataclass."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import summarize_email
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content='{"key_points": ["Point 1"], "action_items": [], "deadline": null, "priority": "medium", "one_liner": "Test summary."}'
+        )
+
+        email = {
+            "sender": "alice@example.com",
+            "subject": "Test Subject",
+            "date": datetime(2024, 1, 15, 10, 0, 0),
+            "body_text": "This is a test email body.",
+        }
+
+        result = summarize_email(mock_llm, email)
+        assert isinstance(result, EmailSummary)
+        assert result.subject == "Test Subject"
 
     def test_summary_includes_key_fields(self) -> None:
         """Test summary includes subject, date, key_points, action_items."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        import json
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import summarize_email
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content=json.dumps(
+                {
+                    "key_points": ["Point 1", "Point 2"],
+                    "action_items": ["Action 1"],
+                    "deadline": "2024-01-20",
+                    "priority": "high",
+                    "one_liner": "Test summary.",
+                }
+            )
+        )
+
+        email = {
+            "sender": "alice@example.com",
+            "subject": "Test Subject",
+            "date": datetime(2024, 1, 15, 10, 0, 0),
+            "body_text": "This is a test email body.",
+        }
+
+        result = summarize_email(mock_llm, email)
+        assert result.key_points == ["Point 1", "Point 2"]
+        assert result.action_items == ["Action 1"]
+        assert result.deadline == "2024-01-20"
+        assert result.priority == "high"
+        assert result.one_liner == "Test summary."
 
     def test_summary_calls_llm_client(self) -> None:
         """Test summarize_email uses LLM client for summarization."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import summarize_email
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content='{"key_points": [], "action_items": [], "deadline": null, "priority": "medium", "one_liner": "Summary."}'
+        )
+
+        email = {
+            "sender": "alice@example.com",
+            "subject": "Test Subject",
+            "date": datetime(2024, 1, 15, 10, 0, 0),
+            "body_text": "This is a test email body.",
+        }
+
+        summarize_email(mock_llm, email)
+        mock_llm.chat.assert_called_once()
+        # Check that the prompt was formatted with email details
+        call_args = mock_llm.chat.call_args
+        assert len(call_args[0][0]) == 1  # One message
+        assert "alice@example.com" in call_args[0][0][0]["content"]
 
     def test_summary_handles_empty_body(self) -> None:
         """Test summarize_email handles emails with empty body."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from unittest.mock import MagicMock
 
-    def test_summary_respects_max_tokens(self) -> None:
-        """Test LLM call respects max_tokens parameter."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        from mail_manager.summary_report import summarize_email
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content='{"key_points": [], "action_items": [], "deadline": null, "priority": "low", "one_liner": "Empty email."}'
+        )
+
+        email = {
+            "sender": "alice@example.com",
+            "subject": "Test Subject",
+            "date": datetime(2024, 1, 15, 10, 0, 0),
+            "body_text": "",
+        }
+
+        result = summarize_email(mock_llm, email)
+        assert isinstance(result, EmailSummary)
+        assert result.subject == "Test Subject"
+
+    def test_summary_handles_malformed_json(self) -> None:
+        """Test summarize_email handles malformed JSON with fallback."""
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import summarize_email
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(content="This is not valid JSON")
+
+        email = {
+            "sender": "alice@example.com",
+            "subject": "Test Subject",
+            "date": datetime(2024, 1, 15, 10, 0, 0),
+            "body_text": "This is a test email body.",
+        }
+
+        result = summarize_email(mock_llm, email)
+        assert isinstance(result, EmailSummary)
+        # Should have fallback values
+        assert result.key_points == []
+        assert result.action_items == []
+        assert result.priority == "medium"
+
+    def test_summary_handles_markdown_code_block(self) -> None:
+        """Test summarize_email handles JSON in markdown code block."""
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import summarize_email
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content='```json\n{"key_points": ["Point 1"], "action_items": [], "deadline": null, "priority": "medium", "one_liner": "Summary."}\n```'
+        )
+
+        email = {
+            "sender": "alice@example.com",
+            "subject": "Test Subject",
+            "date": datetime(2024, 1, 15, 10, 0, 0),
+            "body_text": "This is a test email body.",
+        }
+
+        result = summarize_email(mock_llm, email)
+        assert result.key_points == ["Point 1"]
+
+    def test_summary_truncates_long_body(self) -> None:
+        """Test summarize_email truncates long body_text (>2000 chars)."""
+        from unittest.mock import MagicMock
+
+        from mail_manager.summary_report import summarize_email
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = MagicMock(
+            content='{"key_points": [], "action_items": [], "deadline": null, "priority": "medium", "one_liner": "Summary."}'
+        )
+
+        # Create an email with body longer than 2000 chars
+        email = {
+            "sender": "alice@example.com",
+            "subject": "Test Subject",
+            "date": datetime(2024, 1, 15, 10, 0, 0),
+            "body_text": "x" * 3000,
+        }
+
+        summarize_email(mock_llm, email)
+        # Verify the body was truncated in the prompt
+        call_args = mock_llm.chat.call_args
+        prompt_content = call_args[0][0][0]["content"]
+        assert len(prompt_content) < 3500  # Should be truncated
 
 
 class TestOverallSummary:
