@@ -1,14 +1,47 @@
-"""Test stubs for Email Summary Report functionality.
+"""Tests for Email Summary Report functionality.
 
-These tests define the expected interface for the summary report module.
-All tests currently skip with ImportError since the module doesn't exist yet.
-This follows the TDD red phase pattern.
+Tests for group_emails_by_sender, EmailSummary dataclass, and summarize_email.
 """
 
 from datetime import datetime
-from unittest.mock import MagicMock, patch
 
 import pytest
+
+# Import will fail initially - this is expected in RED phase
+from mail_manager.summary_report import EmailSummary, group_emails_by_sender
+
+
+class TestEmailSummaryDataclass:
+    """Tests for EmailSummary dataclass (SUMMARY-01)."""
+
+    def test_email_summary_has_all_required_fields(self) -> None:
+        """Test EmailSummary dataclass has all required fields."""
+        summary = EmailSummary(
+            subject="Test Subject",
+            key_points=["Point 1", "Point 2"],
+            action_items=["Action 1"],
+            deadline="2024-01-20",
+            priority="high",
+            one_liner="This is a one-line summary.",
+        )
+        assert summary.subject == "Test Subject"
+        assert summary.key_points == ["Point 1", "Point 2"]
+        assert summary.action_items == ["Action 1"]
+        assert summary.deadline == "2024-01-20"
+        assert summary.priority == "high"
+        assert summary.one_liner == "This is a one-line summary."
+
+    def test_email_summary_accepts_optional_deadline(self) -> None:
+        """Test EmailSummary deadline can be None."""
+        summary = EmailSummary(
+            subject="Test Subject",
+            key_points=["Point 1"],
+            action_items=[],
+            deadline=None,
+            priority="medium",
+            one_liner="Summary.",
+        )
+        assert summary.deadline is None
 
 
 class TestGroupEmailsBySender:
@@ -16,23 +49,171 @@ class TestGroupEmailsBySender:
 
     def test_groups_emails_by_sender_field(self) -> None:
         """Test emails are grouped by sender address."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        emails = [
+            {
+                "message_id": "msg-1@example.com",
+                "sender": "alice@example.com",
+                "subject": "Email 1",
+                "date": datetime(2024, 1, 15, 10, 0, 0),
+                "body_text": "Body 1",
+            },
+            {
+                "message_id": "msg-2@example.com",
+                "sender": "alice@example.com",
+                "subject": "Email 2",
+                "date": datetime(2024, 1, 16, 10, 0, 0),
+                "body_text": "Body 2",
+            },
+            {
+                "message_id": "msg-3@example.com",
+                "sender": "bob@example.com",
+                "subject": "Email 3",
+                "date": datetime(2024, 1, 17, 10, 0, 0),
+                "body_text": "Body 3",
+            },
+        ]
+        result = group_emails_by_sender(emails)
+        assert "alice@example.com" in result
+        assert "bob@example.com" in result
+        assert len(result["alice@example.com"]) == 2
+        assert len(result["bob@example.com"]) == 1
 
     def test_returns_dict_with_sender_keys(self) -> None:
         """Test result is dict mapping sender to list of emails."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        emails = [
+            {
+                "message_id": "msg-1@example.com",
+                "sender": "alice@example.com",
+                "subject": "Email 1",
+                "date": datetime(2024, 1, 15, 10, 0, 0),
+                "body_text": "Body 1",
+            },
+        ]
+        result = group_emails_by_sender(emails)
+        assert isinstance(result, dict)
+        assert "alice@example.com" in result
+        assert isinstance(result["alice@example.com"], list)
 
     def test_empty_list_returns_empty_dict(self) -> None:
         """Test empty email list returns empty dict."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        result = group_emails_by_sender([])
+        assert result == {}
 
     def test_single_sender_all_emails_grouped(self) -> None:
         """Test all emails from same sender in one group."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        emails = [
+            {
+                "message_id": "msg-1@example.com",
+                "sender": "alice@example.com",
+                "subject": "Email 1",
+                "date": datetime(2024, 1, 15, 10, 0, 0),
+                "body_text": "Body 1",
+            },
+            {
+                "message_id": "msg-2@example.com",
+                "sender": "alice@example.com",
+                "subject": "Email 2",
+                "date": datetime(2024, 1, 16, 10, 0, 0),
+                "body_text": "Body 2",
+            },
+        ]
+        result = group_emails_by_sender(emails)
+        assert len(result) == 1
+        assert "alice@example.com" in result
+        assert len(result["alice@example.com"]) == 2
 
     def test_multiple_senders_separate_groups(self) -> None:
         """Test emails from different senders in separate groups."""
-        pytest.skip("Module scripts.mail_manager.summary_report does not exist yet")
+        emails = [
+            {
+                "message_id": "msg-1@example.com",
+                "sender": "alice@example.com",
+                "subject": "Email 1",
+                "date": datetime(2024, 1, 15, 10, 0, 0),
+                "body_text": "Body 1",
+            },
+            {
+                "message_id": "msg-2@example.com",
+                "sender": "bob@example.com",
+                "subject": "Email 2",
+                "date": datetime(2024, 1, 16, 10, 0, 0),
+                "body_text": "Body 2",
+            },
+            {
+                "message_id": "msg-3@example.com",
+                "sender": "charlie@example.com",
+                "subject": "Email 3",
+                "date": datetime(2024, 1, 17, 10, 0, 0),
+                "body_text": "Body 3",
+            },
+        ]
+        result = group_emails_by_sender(emails)
+        assert len(result) == 3
+        assert set(result.keys()) == {
+            "alice@example.com",
+            "bob@example.com",
+            "charlie@example.com",
+        }
+
+    def test_skips_emails_without_sender(self) -> None:
+        """Test emails with missing/None sender are skipped."""
+        emails = [
+            {
+                "message_id": "msg-1@example.com",
+                "sender": "alice@example.com",
+                "subject": "Email 1",
+                "date": datetime(2024, 1, 15, 10, 0, 0),
+                "body_text": "Body 1",
+            },
+            {
+                "message_id": "msg-2@example.com",
+                "sender": None,
+                "subject": "Email 2",
+                "date": datetime(2024, 1, 16, 10, 0, 0),
+                "body_text": "Body 2",
+            },
+            {
+                "message_id": "msg-3@example.com",
+                "sender": "",
+                "subject": "Email 3",
+                "date": datetime(2024, 1, 17, 10, 0, 0),
+                "body_text": "Body 3",
+            },
+        ]
+        result = group_emails_by_sender(emails)
+        assert len(result) == 1
+        assert "alice@example.com" in result
+
+    def test_groups_sorted_by_date(self) -> None:
+        """Test emails within each group are sorted by date."""
+        emails = [
+            {
+                "message_id": "msg-3@example.com",
+                "sender": "alice@example.com",
+                "subject": "Email 3",
+                "date": datetime(2024, 1, 17, 10, 0, 0),
+                "body_text": "Body 3",
+            },
+            {
+                "message_id": "msg-1@example.com",
+                "sender": "alice@example.com",
+                "subject": "Email 1",
+                "date": datetime(2024, 1, 15, 10, 0, 0),
+                "body_text": "Body 1",
+            },
+            {
+                "message_id": "msg-2@example.com",
+                "sender": "alice@example.com",
+                "subject": "Email 2",
+                "date": datetime(2024, 1, 16, 10, 0, 0),
+                "body_text": "Body 2",
+            },
+        ]
+        result = group_emails_by_sender(emails)
+        group = result["alice@example.com"]
+        assert group[0]["subject"] == "Email 1"
+        assert group[1]["subject"] == "Email 2"
+        assert group[2]["subject"] == "Email 3"
 
 
 class TestSummarizeEmail:
