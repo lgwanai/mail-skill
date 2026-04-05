@@ -27,8 +27,10 @@ from mail_manager.client import MailClient
 from mail_manager.db import MailDatabase
 from mail_manager.detail import format_email_detail
 from mail_manager.errors import ErrorCodes, error_response, success_response
+from mail_manager.llm.client import LLMClient
 from mail_manager.query_parser import ParsedQuery, match_senders, parse_natural_query
 from mail_manager.server import AttachmentServer, ServerState
+from mail_manager.summary_report import generate_email_summary_report
 from mail_manager.templates import TemplateManager
 
 if TYPE_CHECKING:
@@ -1913,6 +1915,92 @@ def cmd_ai_reply(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
         print("Reply cancelled.")
 
 
+def cmd_summary_report(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Generate email summary report by sender.
+
+    Orchestrates the generation of an email summary report for a given
+    recipient and date range. The report groups emails by sender and
+    provides LLM-generated summaries.
+
+    Args:
+        args: CLI arguments with account, date_from, date_to, days, limit, output.
+        config: Configuration dictionary.
+        db: MailDatabase instance (not used, we create isolated one per account).
+    """
+    from datetime import date, datetime
+
+    # Get account-specific paths
+    client = get_client(config, getattr(args, "account", None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths["db_path"])
+
+    # Parse date arguments
+    date_from: date | None = None
+    date_to: date | None = None
+
+    if getattr(args, "date_from", None):
+        try:
+            date_from = datetime.strptime(args.date_from, "%Y-%m-%d").date()
+        except ValueError:
+            print(
+                json.dumps(
+                    error_response(
+                        ErrorCodes.USER_INVALID_PARAMETER,
+                        f"Invalid date_from format: {args.date_from}. Use YYYY-MM-DD.",
+                    )
+                )
+            )
+            return
+
+    if getattr(args, "date_to", None):
+        try:
+            date_to = datetime.strptime(args.date_to, "%Y-%m-%d").date()
+        except ValueError:
+            print(
+                json.dumps(
+                    error_response(
+                        ErrorCodes.USER_INVALID_PARAMETER,
+                        f"Invalid date_to format: {args.date_to}. Use YYYY-MM-DD.",
+                    )
+                )
+            )
+            return
+
+    try:
+        # Initialize LLM client
+        llm_client = LLMClient()
+
+        # Generate the report
+        report = generate_email_summary_report(
+            db=isolated_db,
+            llm_client=llm_client,
+            recipient=client.email or "unknown@example.com",
+            date_from=date_from,
+            date_to=date_to,
+            days_back=getattr(args, "days", 7),
+            limit=getattr(args, "limit", 100),
+            output_path=getattr(args, "output", None),
+        )
+
+        # Output based on whether file was written
+        if getattr(args, "output", None):
+            print(
+                json.dumps(
+                    success_response(
+                        data={"output_path": args.output, "preview": report[:200] + "..." if len(report) > 200 else report},
+                        message=f"Report saved to {args.output}",
+                    )
+                )
+            )
+        else:
+            # Print the raw report for direct output
+            print(report)
+
+    except Exception as e:
+        logger.error(f"Failed to generate summary report: {e}")
+        print(json.dumps(error_response(ErrorCodes.SERVER_DATABASE_ERROR, str(e))))
+
+
 def main():
     parser = argparse.ArgumentParser(description="Mail Manager CLI")
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
@@ -2133,6 +2221,15 @@ def main():
     ai_reply_p.add_argument("--dry-run", action="store_true", help="Show suggestion without sending")
     ai_reply_p.add_argument("--account", help="Account to send from")
 
+    # summary-report
+    summary_p = subparsers.add_parser("summary-report", help="Generate email summary report by sender")
+    summary_p.add_argument("--account", help="Account to use")
+    summary_p.add_argument("--date-from", help="Start date (YYYY-MM-DD)")
+    summary_p.add_argument("--date-to", help="End date (YYYY-MM-DD)")
+    summary_p.add_argument("--days", type=int, default=7, help="Days to look back")
+    summary_p.add_argument("--limit", type=int, default=100, help="Max emails to process")
+    summary_p.add_argument("--output", help="Output file path")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -2186,6 +2283,8 @@ def main():
         cmd_parse_attachments(args, config, db)
     elif args.command == "ai-reply":
         cmd_ai_reply(args, config, db)
+    elif args.command == "summary-report":
+        cmd_summary_report(args, config, db)
 
 
 if __name__ == "__main__":

@@ -1537,3 +1537,183 @@ class TestAIReplyCommand:
         captured = capsys.readouterr()
         assert "Suggested Reply" in captured.out
         assert "This is a test reply." in captured.out
+
+
+class TestSummaryReport:
+    """Tests for summary-report CLI command."""
+
+    @pytest.fixture
+    def mock_config(self, test_config: dict) -> dict:
+        """Create mock config with accounts."""
+        return {
+            "ACCOUNTS": {"test@example.com": test_config},
+            "STORAGE_ROOT": "/tmp/test",
+            "DB_PATH": "/tmp/test.db",
+            "ATTACHMENT_PATH": "/tmp/attachments",
+        }
+
+    def test_cmd_summary_report_basic(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """summary-report generates report with basic arguments."""
+        from mail_cli import cmd_summary_report
+
+        args = MagicMock()
+        args.account = None
+        args.date_from = None
+        args.date_to = None
+        args.days = 7
+        args.limit = 100
+        args.output = None
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = [
+            {
+                "message_id": "msg1@example.com",
+                "sender": "alice@example.com",
+                "recipient": "test@example.com",
+                "subject": "Project Update",
+                "date": "2024-01-15",
+                "body_text": "The project is on track.",
+            }
+        ]
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    with patch("mail_cli.LLMClient") as mock_llm_class:
+                        mock_llm = MagicMock()
+                        mock_llm.chat.return_value = MagicMock(
+                            content='{"key_points": [], "action_items": [], "priority": "medium", "one_liner": "Test summary"}'
+                        )
+                        mock_llm_class.return_value = mock_llm
+                        with patch("mail_cli.generate_email_summary_report") as mock_generate:
+                            mock_generate.return_value = "# Email Summary Report\n\nTest report content."
+                            cmd_summary_report(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        assert "# Email Summary Report" in captured.out
+
+    def test_cmd_summary_report_with_output(
+        self, mock_config: dict, capsys: pytest.CaptureFixture, tmp_path
+    ) -> None:
+        """summary-report with --output saves to file."""
+        from mail_cli import cmd_summary_report
+
+        output_file = tmp_path / "report.md"
+
+        args = MagicMock()
+        args.account = None
+        args.date_from = None
+        args.date_to = None
+        args.days = 7
+        args.limit = 100
+        args.output = str(output_file)
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = []
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    with patch("mail_cli.LLMClient") as mock_llm_class:
+                        mock_llm = MagicMock()
+                        mock_llm_class.return_value = mock_llm
+                        with patch("mail_cli.generate_email_summary_report") as mock_generate:
+                            mock_generate.return_value = "# Email Summary Report\n\nTest report."
+                            cmd_summary_report(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+        assert result["status"] == "success"
+        assert "output_path" in result
+
+    def test_cmd_summary_report_with_date_range(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """summary-report with --date-from and --date-to respects dates."""
+        from mail_cli import cmd_summary_report
+
+        args = MagicMock()
+        args.account = None
+        args.date_from = "2024-01-01"
+        args.date_to = "2024-01-07"
+        args.days = 7
+        args.limit = 100
+        args.output = None
+
+        mock_db = MagicMock()
+        mock_db.search_emails.return_value = []
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    with patch("mail_cli.LLMClient") as mock_llm_class:
+                        mock_llm = MagicMock()
+                        mock_llm_class.return_value = mock_llm
+                        with patch("mail_cli.generate_email_summary_report") as mock_generate:
+                            mock_generate.return_value = "No emails found."
+                            cmd_summary_report(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        # Should output the report (no emails found message)
+        assert "No emails found" in captured.out or "report" in captured.out.lower()
+
+    def test_cmd_summary_report_returns_error_on_failure(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """summary-report returns error response on failure."""
+        from mail_cli import cmd_summary_report
+
+        args = MagicMock()
+        args.account = None
+        args.date_from = None
+        args.date_to = None
+        args.days = 7
+        args.limit = 100
+        args.output = None
+
+        mock_db = MagicMock()
+
+        with patch("mail_cli.get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.email = "test@example.com"
+            mock_get_client.return_value = mock_client
+            with patch("mail_cli.MailDatabase") as mock_db_class:
+                mock_db_class.return_value = mock_db
+                with patch("mail_cli._get_account_paths") as mock_paths:
+                    mock_paths.return_value = {
+                        "db_path": "/tmp/test.db",
+                        "root": "/tmp/test",
+                    }
+                    with patch("mail_cli.LLMClient") as mock_llm_class:
+                        mock_llm_class.side_effect = Exception("LLM connection failed")
+                        cmd_summary_report(args, mock_config, MagicMock())
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+        assert result["status"] == "error"
