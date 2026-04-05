@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 06-smart-enhancements/02-PLAN.md
-last_updated: "2026-04-05T02:16:25.743Z"
-last_activity: "2026-04-05 - Completed Phase 6 Plan 02: Document Parser Infrastructure"
+stopped_at: Completed 06-smart-enhancements/04-PLAN.md
+last_updated: "2026-04-05T02:30:00.000Z"
+last_activity: "2026-04-05 - Completed Phase 6 Plan 04: Enhanced Thread Management"
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 29
-  completed_plans: 24
-  percent: 70
+  completed_plans: 27
+  percent: 90
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 6 of 6 (Smart Enhancements) - In Progress
-Plan: 2 of 4 in current phase
+Plan: 4 of 7 in current phase
 Status: In Progress
-Last activity: 2026-04-05 - Completed Phase 6 Plan 02: Document Parser Infrastructure
+Last activity: 2026-04-05 - Completed Phase 6 Plan 04: Enhanced Thread Management
 
-Progress: [=======---] 70%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -50,12 +50,14 @@ Progress: [=======---] 70%
 | 05-user-experience-enhancement | 1 | 5 min | 5 min |
 
 **Recent Trend:**
-- Phase 6 Plan 02 (Document Parser Infrastructure) completed successfully
-- Protocol-based parser architecture for PDF, Excel, PowerPoint, Text
-- Ready for attachment content indexing integration
+- Phase 6 Plan 04 (Enhanced Thread Management) completed successfully
+- Thread timeline with participant-based expansion and LLM summaries
+- Ready for thread-aware email views and reply context
 
 *Updated after each plan completion*
-| Phase 06-smart-enhancements P02 | 5 | 3 tasks | 7 files |
+| Phase 06-smart-enhancements P04 | 3min | 3 tasks | 2 files |
+| Phase 06-smart-enhancements P02 | 5min | 3 tasks | 7 files |
+| Phase 06-smart-enhancements P01 | 9min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -89,41 +91,47 @@ Recent decisions affecting current work:
 - [Phase 06-smart-enhancements P02]: Protocol-based architecture for document parsers enables easy extension
 - [Phase 06-smart-enhancements P02]: All parsers use context managers for proper resource cleanup
 - [Phase 06-smart-enhancements P02]: Parser registry uses lowercase extension matching for case-insensitivity
+- [Phase 06-smart-enhancements]: Thin wrapper around OpenAI SDK instead of custom HTTP client
+- [Phase 06-smart-enhancements]: Wrap all OpenAI exceptions in MailSkillError for consistent error handling
+- [Phase 06-smart-enhancements]: Use environment variables for all LLM configuration (API key, base URL, model, timeout)
+- [Phase 06-smart-enhancements P04]: Timeline always sorted by date, even without sender thread expansion
+- [Phase 06-smart-enhancements P04]: Full mode without current_message_id shows all emails in detail
+- [Phase 06-smart-enhancements P04]: Thread summary skipped for single-email timelines
 
 ### Pending Todos
 
-None - Phase 6 Plan 02 complete.
+None - Phase 6 Plan 04 complete.
 
 ### Blockers/Concerns
 
-None - Phase 6 Plan 02 complete.
+None - Phase 6 Plan 04 complete.
 
 ### Roadmap Evolution
 
 - Phase 6 added: Smart Enhancements (邮件关联、附件解读、大模型润色)
 
-## Phase 6 Plan 02 Success Criteria
+## Phase 6 Plan 04 Success Criteria
 
 All success criteria met:
 
-1. DocumentParser protocol defined
-2. PDF, Excel, PowerPoint, Text parsers implemented
-3. Parser factory dispatches by file extension
-4. All tests pass with mocked dependencies
-5. parse_attachment() returns ParseResult with text and metadata
+1. get_enhanced_thread_timeline includes participant emails (THREAD-01, THREAD-03)
+2. generate_thread_summary uses LLM for summaries (THREAD-02)
+3. format_thread_view shows current vs other emails (THREAD-02)
+4. All tests pass with 96% coverage
+5. Thread view integrates with existing detail.py formatting
 
 ## Session Continuity
 
-Last session: 2026-04-05T02:16:25.740Z
-Stopped at: Completed 06-smart-enhancements/02-PLAN.md
+Last session: 2026-04-05T02:30:00.000Z
+Stopped at: Completed 06-smart-enhancements/04-PLAN.md
 Resume file: None
 
 ## Next Plan
 
-Phase 6 Plan 3: Image Parser for Vision API
-- Goal: Implement image parsing with OpenAI Vision API
-- Requirements: ATTACH-AI-02
-- Plans: 06-03-PLAN.md (need to run /gsd:execute-phase for next plan)
+Phase 6 Plan 5: Reply Assistant
+- Goal: Implement reply composition with LLM
+- Requirements: REPLY-01, REPLY-02
+- Plans: 06-05-PLAN.md (need to run /gsd:execute-phase for next plan)
 
 ---
 *State initialized: 2026-04-04*
