@@ -60,6 +60,13 @@
 - [ ] **MARK-03**: 支持按搜索结果批量操作（如"标记所有已读"）
 - [ ] **MARK-04**: 新增标签功能，支持自定义标签
 
+### Email Summary Report (邮件汇总报告)
+
+- [x] **SUMMARY-01**: 按发件人维度分组邮件，支持收件人和时间范围筛选
+- [x] **SUMMARY-02**: 每封邮件生成结构化摘要（关键点、行动项、截止日期、优先级）
+- [ ] **SUMMARY-03**: 生成总体总结，汇总关键主题和待办事项
+- [ ] **SUMMARY-04**: 格式化输出为易读的 Markdown 报告，支持导出
+
 ## v2 Requirements (Deferred)
 
 ### AI-Powered Features
@@ -128,12 +135,16 @@
 | MARK-04 | Phase 5 | Pending |
 | ATTACH-AI-01 | Phase 6 | Complete |
 | ATTACH-AI-02 | Phase 6 | Complete |
+| SUMMARY-01 | Phase 7 | Complete |
+| SUMMARY-02 | Phase 7 | Complete |
+| SUMMARY-03 | Phase 7 | Pending |
+| SUMMARY-04 | Phase 7 | Pending |
 
 **Coverage:**
-- v1 requirements: 30 total
-- Mapped to phases: 30
+- v1 requirements: 34 total
+- Mapped to phases: 34
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-04*
-*Last updated: 2026-04-04 - CLAS-01, CLAS-02 complete*
+*Last updated: 2026-04-05 - SUMMARY-01, SUMMARY-02 complete*
