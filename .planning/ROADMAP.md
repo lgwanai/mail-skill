@@ -131,6 +131,34 @@ Plans:
 - [x] 06-05-PLAN.md — AI reply composition with feedback learning (REPLY-AI-01, REPLY-AI-03)
 - [x] 06-06-PLAN.md — CLI integration for parse-attachments, read --thread, ai-reply (ATTACH-AI-01, ATTACH-AI-02, REPLY-AI-02)
 
+### Phase 7: Email Summary Report (邮件汇总报告)
+
+**Goal**: 按照给定的收件人和给定的时间段，汇总一发件人维度的邮件，每个邮件进行摘要总结，并总体给出总结。格式需要清晰，易读
+**Depends on**: Phase 6
+**Requirements**: SUMMARY-01, SUMMARY-02, SUMMARY-03, SUMMARY-04
+
+**Success Criteria** (what must be TRUE):
+  1. User can run `summary-report` command with date range to generate report
+  2. User can see emails grouped by sender with individual summaries
+  3. User can see overall summary with consolidated action items and deadlines
+  4. User can save report to a file for sharing
+  5. Report is formatted as readable Markdown
+
+**Features:**
+1. **按发件人分组**: 根据收件人和时间范围筛选邮件，按发件人维度分组展示
+2. **邮件摘要**: 每封邮件生成简明摘要，包含关键信息和行动项
+3. **总体总结**: 汇总所有邮件，给出整体概述和待办事项清单
+4. **格式化输出**: 清晰易读的 Markdown 格式，支持导出
+
+**Plans**: 5 plans in 4 waves
+
+Plans:
+- [ ] 07-00-PLAN.md — Test stubs and fixtures for summary report module (Wave 0)
+- [ ] 07-01-PLAN.md — Email grouping and individual summarization (SUMMARY-01, SUMMARY-02)
+- [ ] 07-02-PLAN.md — Overall summary generation (SUMMARY-03)
+- [ ] 07-03-PLAN.md — Markdown formatting and report generation (SUMMARY-04)
+- [ ] 07-04-PLAN.md — CLI integration for summary-report command (All requirements)
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -141,25 +169,8 @@ Plans:
 | 4. Smart Classification | 4/4 | Complete | 04-00-PLAN, 04-01-PLAN, 04-02-PLAN, 04-03-PLAN |
 | 5. User Experience Enhancement | 6/6 | Complete | 05-00-PLAN, 05-01-PLAN, 05-02-PLAN, 05-03-PLAN, 05-04-PLAN, 05-05-PLAN |
 | 6. Smart Enhancements | 7/7 | Complete | 06-00-PLAN, 06-01-PLAN, 06-02-PLAN, 06-03-PLAN, 06-04-PLAN, 06-05-PLAN, 06-06-PLAN |
-| 7. Email Summary Report | 0/TBD | Not started | - |
-
-### Phase 7: Email Summary Report (邮件汇总报告)
-
-**Goal**: 按照给定的收件人和给定的时间段，汇总一发件人维度的邮件，每个邮件进行摘要总结，并总体给出总结。格式需要清晰，易读
-**Depends on**: Phase 6
-**Requirements**: SUMMARY-01, SUMMARY-02, SUMMARY-03, SUMMARY-04
-
-**Features:**
-1. **按发件人分组**: 根据收件人和时间范围筛选邮件，按发件人维度分组展示
-2. **邮件摘要**: 每封邮件生成简明摘要，包含关键信息和行动项
-3. **总体总结**: 汇总所有邮件，给出整体概述和待办事项清单
-4. **格式化输出**: 清晰易读的 Markdown 格式，支持导出
-
-**Plans**: TBD
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 7 to break down)
+| 7. Email Summary Report | 0/5 | Not started | - |
 
 ---
 *Roadmap created: 2026-04-04*
-*Last updated: 2026-04-05 - Phase 6 plans created*
+*Last updated: 2026-04-05 - Phase 7 plans created*
