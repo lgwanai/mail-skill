@@ -366,3 +366,149 @@ class TestTimelineSorting:
 
         message_ids = [e["message_id"] for e in result]
         assert len(message_ids) == len(set(message_ids))  # No duplicates
+
+
+class TestFormatThreadViewCurrentMessage:
+    """Tests for format_thread_view with current_message_id."""
+
+    def test_format_with_current_message_highlighted(self) -> None:
+        """Test format_thread_view highlights current email."""
+        from scripts.mail_manager.thread_manager import format_thread_view
+
+        timeline = [
+            {
+                "message_id": "msg-1",
+                "sender": "alice@example.com",
+                "subject": "First",
+                "date": datetime(2024, 1, 1),
+                "body_text": "Body one.",
+            },
+            {
+                "message_id": "msg-2",
+                "sender": "bob@example.com",
+                "subject": "Second",
+                "date": datetime(2024, 1, 2),
+                "body_text": "Body two.",
+            },
+        ]
+
+        result = format_thread_view(
+            timeline=timeline,
+            current_message_id="msg-2",
+            display_mode="full",
+        )
+
+        # Current email should be marked
+        assert "Current Email" in result
+        # Current email should show body
+        assert "Body two." in result
+        # Other email should be summary only
+        assert "Body one." not in result
+
+    def test_format_with_llm_summary_generation(self) -> None:
+        """Test format_thread_view generates summary with LLM client."""
+        from scripts.mail_manager.thread_manager import format_thread_view
+
+        mock_llm = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = "Thread discussion summary."
+        mock_llm.chat.return_value = mock_response
+
+        timeline = [
+            {
+                "message_id": "msg-1",
+                "sender": "alice@example.com",
+                "subject": "Topic",
+                "date": datetime(2024, 1, 1),
+                "body_text": "Discussion start.",
+            },
+            {
+                "message_id": "msg-2",
+                "sender": "bob@example.com",
+                "subject": "Re: Topic",
+                "date": datetime(2024, 1, 2),
+                "body_text": "Discussion reply.",
+            },
+        ]
+
+        result = format_thread_view(
+            timeline=timeline,
+            current_message_id="msg-2",
+            display_mode="full",
+            llm_client=mock_llm,
+        )
+
+        # LLM should be called for summary
+        mock_llm.chat.assert_called_once()
+        assert "Thread discussion summary." in result
+
+
+class TestGenerateThreadSummaryWithCurrentEmail:
+    """Tests for generate_thread_summary with current_email parameter."""
+
+    def test_summary_excludes_current_email(self) -> None:
+        """Test summary excludes the current email from context."""
+        from scripts.mail_manager.thread_manager import generate_thread_summary
+
+        mock_llm = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = "Summary of thread."
+        mock_llm.chat.return_value = mock_response
+
+        timeline = [
+            {
+                "message_id": "msg-1",
+                "sender": "alice@example.com",
+                "subject": "Topic",
+                "date": datetime(2024, 1, 1),
+                "body_text": "Discussion start.",
+            },
+            {
+                "message_id": "msg-2",
+                "sender": "bob@example.com",
+                "subject": "Re: Topic",
+                "date": datetime(2024, 1, 2),
+                "body_text": "Discussion reply.",
+            },
+        ]
+
+        current_email = {"message_id": "msg-2"}
+
+        result = generate_thread_summary(
+            llm_client=mock_llm,
+            timeline=timeline,
+            current_email=current_email,
+        )
+
+        # Check that the prompt only contains msg-1
+        call_args = mock_llm.chat.call_args
+        prompt = call_args[1]["messages"][0]["content"]
+        assert "alice@example.com" in prompt
+        assert "bob@example.com" not in prompt
+        assert result == "Summary of thread."
+
+    def test_summary_empty_when_only_current_email(self) -> None:
+        """Test summary returns empty when timeline only has current email."""
+        from scripts.mail_manager.thread_manager import generate_thread_summary
+
+        mock_llm = MagicMock()
+
+        timeline = [
+            {
+                "message_id": "msg-1",
+                "sender": "alice@example.com",
+                "subject": "Solo",
+                "date": datetime(2024, 1, 1),
+                "body_text": "Just me.",
+            },
+        ]
+
+        current_email = {"message_id": "msg-1"}
+
+        result = generate_thread_summary(
+            llm_client=mock_llm,
+            timeline=timeline,
+            current_email=current_email,
+        )
+
+        assert result == ""
