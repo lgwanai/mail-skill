@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-user-experience-enhancement/02-PLAN.md
-last_updated: "2026-04-05T01:12:07.457Z"
-last_activity: "2026-04-04 - Completed Phase 5 Plan 02: Email Detail Formatting"
+stopped_at: Completed 06-smart-enhancements/02-PLAN.md
+last_updated: "2026-04-05T02:16:25.743Z"
+last_activity: "2026-04-05 - Completed Phase 6 Plan 02: Document Parser Infrastructure"
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 22
-  completed_plans: 22
-  percent: 68
+  total_plans: 29
+  completed_plans: 24
+  percent: 70
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** Let email management transform from "manual operations" to "intent-driven"
-**Current focus:** Phase 5: User Experience Enhancement - Plan 02 Complete
+**Current focus:** Phase 6: Smart Enhancements - Plan 02 Complete
 
 ## Current Position
 
-Phase: 5 of 6 (User Experience Enhancement) - In Progress
-Plan: 2 of 6 in current phase
+Phase: 6 of 6 (Smart Enhancements) - In Progress
+Plan: 2 of 4 in current phase
 Status: In Progress
-Last activity: 2026-04-04 - Completed Phase 5 Plan 02: Email Detail Formatting
+Last activity: 2026-04-05 - Completed Phase 6 Plan 02: Document Parser Infrastructure
 
-Progress: [=======---] 68%
+Progress: [=======---] 70%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17
+- Total plans completed: 18
 - Average duration: 4 min
-- Total execution time: 67 min
+- Total execution time: 72 min
 
 **By Phase:**
 
@@ -50,13 +50,12 @@ Progress: [=======---] 68%
 | 05-user-experience-enhancement | 1 | 5 min | 5 min |
 
 **Recent Trend:**
-- Phase 5 Plan 02 (Detail Formatting) completed successfully
-- Email detail now formatted as Markdown with all relevant info
-- Ready for CLI integration
+- Phase 6 Plan 02 (Document Parser Infrastructure) completed successfully
+- Protocol-based parser architecture for PDF, Excel, PowerPoint, Text
+- Ready for attachment content indexing integration
 
 *Updated after each plan completion*
-| Phase 05-user-experience-enhancement P02 | 5 | 5 tasks | 2 files |
-| Phase 05-user-experience-enhancement P02 | 5min | 5 tasks | 2 files |
+| Phase 06-smart-enhancements P02 | 5 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -87,42 +86,45 @@ Recent decisions affecting current work:
 - [Phase 05-user-experience-enhancement]: Single detail.py module with pure functions for testability
 - [Phase 05-user-experience-enhancement]: Subject truncation to 50 characters for thread context readability
 - [Phase 05-user-experience-enhancement]: Confidence score hidden when < 0.5 or manual_override is True
+- [Phase 06-smart-enhancements P02]: Protocol-based architecture for document parsers enables easy extension
+- [Phase 06-smart-enhancements P02]: All parsers use context managers for proper resource cleanup
+- [Phase 06-smart-enhancements P02]: Parser registry uses lowercase extension matching for case-insensitivity
 
 ### Pending Todos
 
-None - Phase 5 Plan 02 complete.
+None - Phase 6 Plan 02 complete.
 
 ### Blockers/Concerns
 
-None - Phase 5 Plan 02 complete.
+None - Phase 6 Plan 02 complete.
 
 ### Roadmap Evolution
 
 - Phase 6 added: Smart Enhancements (邮件关联、附件解读、大模型润色)
 
-## Phase 5 Plan 02 Success Criteria
+## Phase 6 Plan 02 Success Criteria
 
 All success criteria met:
 
-1. Email detail output is formatted as Markdown
-2. All headers visible (from, to, cc, date, subject)
-3. Classification info displayed (importance, category, confidence)
-4. Attachments listed with preview links
-5. Thread context shows parent/reply emails
+1. DocumentParser protocol defined
+2. PDF, Excel, PowerPoint, Text parsers implemented
+3. Parser factory dispatches by file extension
+4. All tests pass with mocked dependencies
+5. parse_attachment() returns ParseResult with text and metadata
 
 ## Session Continuity
 
-Last session: 2026-04-04T16:13:48.086Z
-Stopped at: Completed 05-user-experience-enhancement/02-PLAN.md
+Last session: 2026-04-05T02:16:25.740Z
+Stopped at: Completed 06-smart-enhancements/02-PLAN.md
 Resume file: None
 
 ## Next Plan
 
-Phase 5 Plan 3: CLI Integration for Detail View
-- Goal: Integrate detail formatting into CLI commands
-- Requirements: DET-06
-- Plans: 05-03-PLAN.md (need to run /gsd:execute-phase for next plan)
+Phase 6 Plan 3: Image Parser for Vision API
+- Goal: Implement image parsing with OpenAI Vision API
+- Requirements: ATTACH-AI-02
+- Plans: 06-03-PLAN.md (need to run /gsd:execute-phase for next plan)
 
 ---
 *State initialized: 2026-04-04*
-*Last updated: 2026-04-04*
+*Last updated: 2026-04-05*
