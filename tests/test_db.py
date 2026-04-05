@@ -724,3 +724,55 @@ class TestBatchTagOperations:
         """batch_add_tags returns 0 for empty list."""
         count = db.batch_add_tags([], ["tag"])
         assert count == 0
+
+
+class TestAttachmentContentStorage:
+    """Tests for attachment content storage methods."""
+
+    @pytest.fixture
+    def db(self, temp_db_path, mock_chroma_collection):
+        """Create a MailDatabase instance for testing."""
+        return MailDatabase(temp_db_path)
+
+    def test_content_text_column_exists(self, db):
+        """Test that content_text column exists in attachments table."""
+        import sqlite3
+
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(attachments)")
+        columns = {col[1]: col for col in cursor.fetchall()}
+        conn.close()
+
+        assert "content_text" in columns
+        assert columns["content_text"][2] == "TEXT"  # Type
+
+    def test_save_attachment_content_stores_text(self, db, sample_email_data_with_attachment):
+        """Test save_attachment_content stores parsed text."""
+        # First save an email with attachment
+        db.save_email(sample_email_data_with_attachment)
+
+        # Get the attachment local_path (use a test path since it's None)
+        test_path = "/test/attachments/document.pdf"
+        db.save_attachment_content(test_path, "This is the parsed content of the PDF.")
+
+        # Verify content was stored
+        content = db.get_attachment_content(test_path)
+        assert content == "This is the parsed content of the PDF."
+
+    def test_get_attachment_content_returns_none_for_missing(self, db):
+        """Test get_attachment_content returns None for nonexistent path."""
+        content = db.get_attachment_content("/nonexistent/path.pdf")
+        assert content is None
+
+    def test_save_attachment_content_updates_existing(self, db, sample_email_data_with_attachment):
+        """Test save_attachment_content updates existing content."""
+        # First save an email with attachment
+        db.save_email(sample_email_data_with_attachment)
+
+        test_path = "/test/attachments/document.pdf"
+        db.save_attachment_content(test_path, "Initial content")
+        db.save_attachment_content(test_path, "Updated content")
+
+        content = db.get_attachment_content(test_path)
+        assert content == "Updated content"

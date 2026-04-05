@@ -132,6 +132,7 @@ class MailDatabase:
                     content_type TEXT,
                     size INTEGER,
                     local_path TEXT,
+                    content_text TEXT,
                     FOREIGN KEY (message_id) REFERENCES emails (message_id)
                 )
             """)
@@ -149,6 +150,12 @@ class MailDatabase:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_importance ON emails(importance)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_category ON emails(category)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_classification_confidence ON emails(classification_confidence)")
+
+            # Migration: add content_text column to attachments if it doesn't exist
+            cursor.execute("PRAGMA table_info(attachments)")
+            att_columns = [col[1] for col in cursor.fetchall()]
+            if "content_text" not in att_columns:
+                cursor.execute("ALTER TABLE attachments ADD COLUMN content_text TEXT")
 
             # Create FTS5 virtual table for full-text search
             try:
@@ -925,3 +932,53 @@ class MailDatabase:
             self.remove_tags(message_id, tags)
             count += 1
         return count
+
+    # Attachment content storage methods
+
+    def save_attachment_content(self, local_path: str, content: str) -> None:
+        """Save parsed content for an attachment.
+
+        Args:
+            local_path: Local path of the attachment file.
+            content: Parsed text content to store.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            # Check if attachment record exists
+            cursor.execute(
+                "SELECT id FROM attachments WHERE local_path = ?",
+                (local_path,),
+            )
+            row = cursor.fetchone()
+
+            if row:
+                # Update existing record
+                cursor.execute(
+                    "UPDATE attachments SET content_text = ? WHERE local_path = ?",
+                    (content, local_path),
+                )
+            else:
+                # Insert new record with just the content (no message_id)
+                cursor.execute(
+                    "INSERT INTO attachments (local_path, content_text) VALUES (?, ?)",
+                    (local_path, content),
+                )
+            conn.commit()
+
+    def get_attachment_content(self, local_path: str) -> str | None:
+        """Get parsed content for an attachment.
+
+        Args:
+            local_path: Local path of the attachment file.
+
+        Returns:
+            Parsed text content, or None if not found.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT content_text FROM attachments WHERE local_path = ?",
+                (local_path,),
+            )
+            row = cursor.fetchone()
+            return row["content_text"] if row and row["content_text"] else None
