@@ -1752,6 +1752,160 @@ def cmd_rebuild_index(args: Any, config: dict[str, Any], db: MailDatabase) -> No
             print(f"✗ Vector index rebuild failed: {e}")
 
 
+def cmd_parse_attachments(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Parse attachment content for enhanced search."""
+    from mail_manager.attachment_parser import parse_attachment
+    from mail_manager.llm.client import LLMClient
+
+    llm_client = LLMClient()
+
+    if args.message_id:
+        # Parse attachments for specific email
+        cursor = db._get_connection().cursor()
+        cursor.execute(
+            "SELECT * FROM attachments WHERE message_id = ?", (args.message_id,)
+        )
+        attachments = [dict(row) for row in cursor.fetchall()]
+        if not attachments:
+            print(f"No attachments found for email: {args.message_id}")
+            return
+    elif args.all:
+        # Parse all unprocessed attachments (content_text is NULL)
+        cursor = db._get_connection().cursor()
+        cursor.execute(
+            "SELECT * FROM attachments WHERE content_text IS NULL OR content_text = ''"
+        )
+        attachments = [dict(row) for row in cursor.fetchall()]
+        if not attachments:
+            print("No unprocessed attachments found.")
+            return
+    else:
+        print("Specify --message-id or --all")
+        return
+
+    parsed_count = 0
+    for att in attachments:
+        local_path = att.get("local_path")
+        if not local_path:
+            continue
+        path = Path(local_path)
+        if not path.exists():
+            continue
+
+        try:
+            result = parse_attachment(path, llm_client)
+            if result and result.text:
+                # Store content in database
+                db.save_attachment_content(local_path, result.text)
+                print(f"Parsed: {att.get('filename')} ({len(result.text)} chars)")
+                parsed_count += 1
+            else:
+                print(f"No content: {att.get('filename')}")
+        except Exception as e:
+            print(f"Failed to parse {att.get('filename')}: {e}")
+
+    print(f"\nParsed {parsed_count} attachments")
+
+
+def cmd_ai_reply(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Compose and send AI-generated reply."""
+    from mail_manager.reply_assistant import (
+        compose_ai_reply,
+        get_few_shot_examples,
+        store_reply_feedback,
+    )
+    from mail_manager.thread_manager import get_enhanced_thread_timeline
+    from mail_manager.llm.client import LLMClient
+
+    cursor = db._get_connection().cursor()
+    cursor.execute("SELECT * FROM emails WHERE message_id = ?", (args.message_id,))
+    row = cursor.fetchone()
+    if not row:
+        print(f"Email not found: {args.message_id}")
+        return
+    email = dict(row)
+
+    llm_client = LLMClient()
+
+    # Get thread context if available
+    thread = None
+    if args.with_thread:
+        thread = get_enhanced_thread_timeline(db, args.message_id)
+
+    # Get few-shot examples
+    examples = get_few_shot_examples(db)
+
+    # Compose reply
+    print("Generating reply...")
+    reply = compose_ai_reply(
+        llm_client=llm_client,
+        original_email=email,
+        thread_context=thread,
+        user_intent=args.intent,
+        few_shot_examples=examples,
+    )
+
+    if args.dry_run:
+        print("\n--- Suggested Reply ---")
+        print(reply)
+        print("-----------------------")
+        return
+
+    # Confirmation flow (REPLY-AI-02)
+    print("\n--- Suggested Reply ---")
+    print(reply)
+    print("-----------------------")
+    response = input("Send this reply? (y/n/e=edit): ").strip().lower()
+
+    final_reply = None
+    if response == "y":
+        final_reply = reply
+    elif response == "e":
+        print("Enter edited reply (Ctrl+D to finish):")
+        lines = []
+        try:
+            while True:
+                lines.append(input())
+        except EOFError:
+            pass
+        edited = "\n".join(lines).strip()
+        if edited:
+            final_reply = edited
+
+    if final_reply:
+        # Get client for sending
+        client = get_client(config, getattr(args, "account", None))
+        try:
+            client.send_email(
+                to=email.get("sender", ""),
+                subject=f"Re: {email.get('subject', '')}",
+                body=final_reply,
+            )
+            print("Reply sent!")
+
+            # Store positive feedback
+            store_reply_feedback(
+                db=db,
+                message_id=args.message_id,
+                original_email_sender=email.get("sender", ""),
+                reply_content=reply,
+                feedback_type="positive",
+                user_edited_content=final_reply if final_reply != reply else None,
+            )
+        except Exception as e:
+            print(f"Failed to send: {e}")
+    else:
+        # Store negative feedback if user rejected
+        store_reply_feedback(
+            db=db,
+            message_id=args.message_id,
+            original_email_sender=email.get("sender", ""),
+            reply_content=reply,
+            feedback_type="negative",
+        )
+        print("Reply cancelled.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Mail Manager CLI")
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
@@ -1956,6 +2110,21 @@ def main():
     tag_batch.add_argument("--limit", type=int, default=100, help="Max emails to tag")
     tag_batch.add_argument("--account", help="Account")
 
+    # parse-attachments
+    parse_att_p = subparsers.add_parser(
+        "parse-attachments", help="Parse attachment content for enhanced search"
+    )
+    parse_att_p.add_argument("--message-id", help="Parse attachments for specific email")
+    parse_att_p.add_argument("--all", action="store_true", help="Parse all unprocessed attachments")
+
+    # ai-reply
+    ai_reply_p = subparsers.add_parser("ai-reply", help="AI-generated reply")
+    ai_reply_p.add_argument("message_id", help="Email to reply to")
+    ai_reply_p.add_argument("--intent", help="Specific intent for reply")
+    ai_reply_p.add_argument("--with-thread", action="store_true", help="Include thread context")
+    ai_reply_p.add_argument("--dry-run", action="store_true", help="Show suggestion without sending")
+    ai_reply_p.add_argument("--account", help="Account to send from")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -2005,6 +2174,10 @@ def main():
         cmd_tag(args, config, db)
     elif args.command == "templates":
         cmd_templates(args, config, db)
+    elif args.command == "parse-attachments":
+        cmd_parse_attachments(args, config, db)
+    elif args.command == "ai-reply":
+        cmd_ai_reply(args, config, db)
 
 
 if __name__ == "__main__":

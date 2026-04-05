@@ -1411,3 +1411,129 @@ class TestCmdTag:
         assert result["status"] == "error"
         assert result["code"] == ErrorCodes.USER_EMAIL_NOT_FOUND
 
+
+class TestParseAttachmentsCommand:
+    """Tests for parse-attachments CLI command."""
+
+    @pytest.fixture
+    def mock_config(self, test_config: dict) -> dict:
+        return test_config
+
+    def test_parse_attachments_requires_message_id_or_all(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """parse-attachments requires either --message-id or --all."""
+        from mail_cli import cmd_parse_attachments
+
+        args = MagicMock()
+        args.message_id = None
+        args.all = False
+
+        mock_db = MagicMock()
+
+        with patch("mail_manager.llm.client.LLMClient"):
+            cmd_parse_attachments(args, mock_config, mock_db)
+
+        captured = capsys.readouterr()
+        assert "Specify --message-id or --all" in captured.out
+
+    def test_parse_attachments_no_attachments_found(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """parse-attachments reports when no attachments found."""
+        from mail_cli import cmd_parse_attachments
+
+        args = MagicMock()
+        args.message_id = "test-msg"
+        args.all = False
+
+        mock_db = MagicMock()
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        mock_conn.cursor.return_value = mock_cursor
+        mock_db._get_connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
+        mock_db._get_connection.return_value.__exit__ = MagicMock(return_value=False)
+
+        with patch("mail_manager.llm.client.LLMClient"):
+            cmd_parse_attachments(args, mock_config, mock_db)
+
+        captured = capsys.readouterr()
+        assert "No attachments found" in captured.out
+
+
+class TestAIReplyCommand:
+    """Tests for ai-reply CLI command."""
+
+    @pytest.fixture
+    def mock_config(self, test_config: dict) -> dict:
+        return test_config
+
+    def test_ai_reply_email_not_found(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """ai-reply returns error when email not found."""
+        from mail_cli import cmd_ai_reply
+
+        args = MagicMock()
+        args.message_id = "nonexistent@example.com"
+        args.intent = None
+        args.with_thread = False
+        args.dry_run = True
+        args.account = None
+
+        mock_db = MagicMock()
+        # Mock the connection context manager properly
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = None  # Email not found
+        mock_conn.cursor.return_value = mock_cursor
+        mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+        mock_conn.__exit__ = MagicMock(return_value=False)
+        mock_db._get_connection.return_value = mock_conn
+
+        with patch("mail_manager.llm.client.LLMClient"):
+            cmd_ai_reply(args, mock_config, mock_db)
+
+        captured = capsys.readouterr()
+        assert "Email not found" in captured.out
+
+    def test_ai_reply_dry_run_shows_suggestion(
+        self, mock_config: dict, capsys: pytest.CaptureFixture
+    ) -> None:
+        """ai-reply --dry-run shows suggestion without sending."""
+        from mail_cli import cmd_ai_reply
+
+        args = MagicMock()
+        args.message_id = "test-msg"
+        args.intent = None
+        args.with_thread = False
+        args.dry_run = True
+        args.account = None
+
+        mock_db = MagicMock()
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {
+            "message_id": "test-msg",
+            "sender": "sender@example.com",
+            "subject": "Test Subject",
+            "body_text": "Test body",
+        }
+        mock_conn.cursor.return_value = mock_cursor
+        mock_db._get_connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
+        mock_db._get_connection.return_value.__exit__ = MagicMock(return_value=False)
+
+        with patch("mail_manager.llm.client.LLMClient") as mock_llm_class:
+            mock_llm = MagicMock()
+            mock_llm_class.return_value = mock_llm
+
+            with patch("mail_manager.reply_assistant.compose_ai_reply") as mock_compose:
+                mock_compose.return_value = "This is a test reply."
+
+                with patch("mail_manager.reply_assistant.get_few_shot_examples", return_value=[]):
+                    cmd_ai_reply(args, mock_config, mock_db)
+
+        captured = capsys.readouterr()
+        assert "Suggested Reply" in captured.out
+        assert "This is a test reply." in captured.out
