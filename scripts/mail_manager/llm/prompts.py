@@ -34,3 +34,24 @@ IMAGE_DESCRIPTION_PROMPT = """Describe the content of this image in detail. Incl
 3. Overall context or purpose
 
 If this is a screenshot, diagram, or chart, explain what information it conveys."""
+
+# Email summary prompt for individual email summarization
+EMAIL_SUMMARY_PROMPT = """Analyze this email and extract a structured summary. Return ONLY valid JSON with these keys:
+
+{
+    "key_points": ["list of main points from the email"],
+    "action_items": ["list of actions requested or implied"],
+    "deadline": "YYYY-MM-DD format if mentioned, or null",
+    "priority": "high/medium/low based on urgency",
+    "one_liner": "single sentence summary of the email"
+}
+
+Email details:
+- From: {sender}
+- Subject: {subject}
+- Date: {date}
+
+Body:
+{body}
+
+Return only the JSON object, no additional text."""
