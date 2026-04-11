@@ -66,6 +66,103 @@ class OverallSummary:
     recommended_priority: list[str] = field(default_factory=list)
 
 
+@dataclass
+class ReplyInfo:
+    """Information about a reply to an email.
+
+    Holds details about an email sent in response to received email.
+
+    Attributes:
+        message_id: Message ID of the sent email.
+        subject: Subject of the sent email.
+        date: Date the reply was sent.
+        one_liner: Brief summary of reply content.
+    """
+
+    message_id: str
+    subject: str = ""
+    date: datetime | None = None
+    one_liner: str = ""
+
+
+SENT_FOLDER_NAMES = [
+    "Sent",
+    "Sent Messages",
+    "Sent Items",
+    "已发送",
+    "已发送邮件",
+    "发件箱",
+]
+
+
+def match_sent_emails_to_received(
+    sent_emails: list[dict[str, Any]],
+    received_emails: list[dict[str, Any]],
+) -> dict[str, ReplyInfo]:
+    """Match sent emails to received emails based on in_reply_to and subject.
+
+    Args:
+        sent_emails: List of sent email dictionaries.
+        received_emails: List of received email dictionaries.
+
+    Returns:
+        Dict mapping received message_id to ReplyInfo.
+
+    Example:
+        >>> sent = [{"message_id": "s1", "in_reply_to": "r1", "subject": "Re: Test"}]
+        >>> received = [{"message_id": "r1", "subject": "Test"}]
+        >>> matches = match_sent_emails_to_received(sent, received)
+        >>> "r1" in matches
+        True
+    """
+    from mail_manager.thread_manager import normalize_subject
+
+    matches: dict[str, ReplyInfo] = {}
+
+    received_by_id: dict[str, dict[str, Any]] = {}
+    received_by_subject: dict[str, dict[str, Any]] = {}
+    for email in received_emails:
+        normalized_subj = normalize_subject(email.get("subject", ""))
+        msg_id = email.get("message_id", "")
+        if msg_id:
+            received_by_id[msg_id] = email
+        if normalized_subj and len(normalized_subj) >= 3:
+            normalized_subj_clean = normalized_subj.replace(" ", "")
+            received_by_subject[normalized_subj_clean] = email
+
+    for sent in sent_emails:
+        in_reply_to = sent.get("in_reply_to", "")
+        if in_reply_to:
+            target_id = in_reply_to.strip()
+            if target_id.startswith("<") and target_id.endswith(">"):
+                target_id = target_id[1:-1]
+            if target_id in received_by_id:
+                matches[target_id] = ReplyInfo(
+                    message_id=sent.get("message_id", ""),
+                    subject=sent.get("subject", ""),
+                    date=sent.get("date"),
+                    one_liner=(sent.get("body_text", "") or "")[:100],
+                )
+                continue
+
+        sent_subject = normalize_subject(sent.get("subject", ""))
+        if sent_subject and len(sent_subject) >= 3:
+            sent_subject_clean = sent_subject.replace(" ", "")
+            for subj_key, received_email in received_by_subject.items():
+                if sent_subject_clean == subj_key:
+                    msg_id = received_email.get("message_id", "")
+                    if msg_id and msg_id not in matches:
+                        matches[msg_id] = ReplyInfo(
+                            message_id=sent.get("message_id", ""),
+                            subject=sent.get("subject", ""),
+                            date=sent.get("date"),
+                            one_liner=(sent.get("body_text", "") or "")[:100],
+                        )
+                    break
+
+    return matches
+
+
 def group_emails_by_sender(emails: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """Group emails by sender address.
 
@@ -287,6 +384,7 @@ def format_summary_report(
     date_to: date,
     sender_summaries: dict[str, list[tuple[dict[str, Any], EmailSummary]]],
     overall: OverallSummary,
+    reply_info: dict[str, ReplyInfo] | None = None,
 ) -> str:
     """Format complete summary report as Markdown.
 
@@ -296,6 +394,7 @@ def format_summary_report(
         date_to: Report end date.
         sender_summaries: Dict mapping sender to list of (email, EmailSummary) tuples.
         overall: OverallSummary object with aggregated information.
+        reply_info: Optional dict mapping received message_id to ReplyInfo.
 
     Returns:
         Markdown-formatted report string.
@@ -409,9 +508,29 @@ def format_summary_report(
                 else:
                     reply_status = " ✅ 已回复"
 
-            sections.append(f"#### {subject}{reply_status}")
+            msg_id = email.get("message_id", "")
+            reply_detail = ""
+            if reply_info and msg_id in reply_info:
+                info = reply_info[msg_id]
+                reply_date = info.date
+                if isinstance(reply_date, datetime):
+                    reply_date_str = reply_date.strftime("%Y-%m-%d")
+                elif reply_date:
+                    reply_date_str = str(reply_date)[:10]
+                else:
+                    reply_date_str = ""
+                reply_detail = f" 📤 已回复于 {reply_date_str}" if reply_date_str else " 📤 已回复"
+                reply_status = ""
+
+            sections.append(f"#### {subject}{reply_status}{reply_detail}")
             sections.append(f"*Date: {date_str}*")
             sections.append("")
+
+            if reply_info and msg_id in reply_info:
+                info = reply_info[msg_id]
+                sections.append("**Reply Summary:**")
+                sections.append(f"> {(info.one_liner or '')[:200]}")
+                sections.append("")
 
             # One-liner
             if summary.one_liner:
@@ -452,6 +571,7 @@ def generate_email_summary_report(
     days_back: int = 7,
     limit: int = 100,
     output_path: str | None = None,
+    include_sent: bool = True,
 ) -> str:
     """Generate complete email summary report.
 
@@ -471,6 +591,7 @@ def generate_email_summary_report(
         days_back: Number of days to look back if date_from not specified.
         limit: Maximum emails to process.
         output_path: Optional path to save report as file.
+        include_sent: Whether to include sent emails for reply matching.
 
     Returns:
         Markdown-formatted report string, or message if no emails found.
@@ -488,13 +609,11 @@ def generate_email_summary_report(
     """
     from datetime import timedelta
 
-    # Set default date range
     if date_to is None:
         date_to = date.today()
     if date_from is None:
         date_from = date_to - timedelta(days=days_back)
 
-    # Step 1: Fetch emails
     emails = db.search_emails(
         date_from=date_from.isoformat() if date_from else None,
         date_to=date_to.isoformat() if date_to else None,
@@ -504,10 +623,8 @@ def generate_email_summary_report(
     if not emails:
         return f"No emails found for {recipient} between {date_from} and {date_to}."
 
-    # Step 2: Group by sender
     sender_groups = group_emails_by_sender(emails)
 
-    # Step 3: Generate summaries per sender
     sender_summaries: dict[str, list[tuple[dict[str, Any], EmailSummary]]] = {}
     all_summaries: dict[str, list[EmailSummary]] = {}
     failed_emails: list[dict[str, Any]] = []
@@ -534,16 +651,38 @@ def generate_email_summary_report(
                 sender_summaries[sender].append((email, fallback))
                 all_summaries[sender].append(fallback)
 
-    # Step 4: Generate overall summary
+    reply_info: dict[str, ReplyInfo] = {}
+    if include_sent:
+        sent_emails: list[dict[str, Any]] = []
+        for folder_name in SENT_FOLDER_NAMES:
+            sent = db.search_emails(
+                folder=folder_name,
+                date_from=date_from.isoformat() if date_from else None,
+                date_to=date_to.isoformat() if date_to else None,
+                limit=limit,
+            )
+            sent_emails.extend(sent)
+
+        seen_ids: set[str] = set()
+        unique_sent: list[dict[str, Any]] = []
+        for e in sent_emails:
+            msg_id = e.get("message_id", "")
+            if msg_id and msg_id not in seen_ids:
+                unique_sent.append(e)
+                seen_ids.add(msg_id)
+
+        if unique_sent:
+            reply_info = match_sent_emails_to_received(unique_sent, emails)
+
     overall = generate_overall_summary(llm_client, all_summaries)
 
-    # Step 5: Format report
     report = format_summary_report(
         recipient=recipient,
         date_from=date_from,
         date_to=date_to,
         sender_summaries=sender_summaries,
         overall=overall,
+        reply_info=reply_info,
     )
 
     # Step 6: Save to file if path provided
