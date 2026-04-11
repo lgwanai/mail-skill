@@ -8,9 +8,14 @@ Uses from __future__ import annotations for Python 3.8 compatibility.
 
 from __future__ import annotations
 
+import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mail_manager.llm.client import LLMClient
 
 
 @dataclass
@@ -219,14 +224,10 @@ class EmailClassifier:
 
         # Select highest scoring importance and category
         importance = (
-            max(importance_scores, key=importance_scores.get)
-            if importance_scores
-            else "normal"
+            max(importance_scores, key=importance_scores.get) if importance_scores else "normal"
         )
         category = (
-            max(category_scores, key=category_scores.get)
-            if category_scores
-            else "uncategorized"
+            max(category_scores, key=category_scores.get) if category_scores else "uncategorized"
         )
 
         # Confidence: ratio of matched weight to total possible weight
@@ -251,3 +252,79 @@ class EmailClassifier:
             List of Classification objects
         """
         return [self.classify(email) for email in emails]
+
+
+def classify_with_llm(llm_client: "LLMClient", email: dict) -> Classification:
+    """Classify an email using LLM.
+
+    Uses LLM to analyze email content and determine importance and category.
+    This is used as a secondary classification for emails that don't match
+    any rules, or for re-classifying emails classified as "normal".
+
+    Args:
+        llm_client: LLM client for making chat completion requests.
+        email: Email dict with sender, subject, body_text fields.
+
+    Returns:
+        Classification with importance, category, confidence, and matched rules.
+
+    Example:
+        >>> from mail_manager.llm.client import LLMClient
+        >>> llm = LLMClient()
+        >>> email = {"sender": "boss@company.com", "subject": "Q3 Report", "body_text": "..."}
+        >>> result = classify_with_llm(llm, email)
+        >>> result.importance in ["critical", "high", "normal", "low"]
+        True
+    """
+    from mail_manager.llm.prompts import EMAIL_CLASSIFICATION_PROMPT
+
+    subject = email.get("subject", "")
+    sender = email.get("sender", "")
+    body = (email.get("body_text", "") or "")[:500]
+
+    prompt = EMAIL_CLASSIFICATION_PROMPT.format(
+        sender=sender,
+        subject=subject,
+        body=body,
+    )
+
+    try:
+        response = llm_client.chat(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=200,
+        )
+
+        content = response.content.strip()
+
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+
+        result = json.loads(content)
+
+        importance = result.get("importance", "normal")
+        category = result.get("category", "uncategorized")
+
+        valid_importance = ["critical", "high", "normal", "low"]
+        valid_category = ["work", "personal", "notification", "promo"]
+
+        if importance not in valid_importance:
+            importance = "normal"
+        if category not in valid_category:
+            category = "uncategorized"
+
+        return Classification(
+            importance=importance,
+            category=category,
+            confidence=0.8,
+            matched_rules=["llm_classification"],
+        )
+    except Exception:
+        return Classification(
+            importance="normal",
+            category="uncategorized",
+            confidence=0.5,
+            matched_rules=[],
+        )

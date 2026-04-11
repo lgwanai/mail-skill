@@ -58,10 +58,10 @@ class TestGetEnhancedThreadTimeline:
             db=mock_db,
             seed_message_id="msg-1",
             include_sender_thread=False,
+            include_subject_match=False,
         )
 
         assert len(result) == 1
-        # Should NOT call search_emails when include_sender_thread is False
         mock_db.search_emails.assert_not_called()
 
     def test_get_enhanced_timeline_empty_seed(self) -> None:
@@ -274,7 +274,7 @@ class TestFormatThreadView:
                 "subject": "Re: Test",
                 "date": datetime(2024, 1, 1, 11, 0),
                 "body_text": "Hi Alice.",
-            }
+            },
         ]
 
         result = format_thread_view(

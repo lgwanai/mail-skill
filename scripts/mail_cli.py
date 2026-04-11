@@ -1644,6 +1644,79 @@ def cmd_reclassify(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
     )
 
 
+def cmd_llm_reclassify(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
+    """Re-classify emails using LLM for better accuracy.
+
+    This command finds emails that were classified as 'normal' importance or
+    'uncategorized' category and uses LLM to provide a more accurate classification.
+    """
+    from mail_manager.classifier import classify_with_llm
+    from mail_manager.llm.client import LLMClient
+
+    client = get_client(config, getattr(args, "account", None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths["db_path"])
+
+    llm_client = LLMClient()
+
+    if args.all:
+        emails = isolated_db.search_emails(limit=args.limit)
+    else:
+        emails = isolated_db.search_emails(importance="normal", limit=args.limit)
+
+    reclassified = 0
+    failed = 0
+    results = []
+
+    for email in emails:
+        current_importance = email.get("importance", "normal")
+        current_category = email.get("category", "uncategorized")
+
+        if not args.all and current_importance != "normal" and current_category != "uncategorized":
+            continue
+
+        try:
+            classification = classify_with_llm(llm_client, email)
+
+            isolated_db.update_classification(
+                message_id=email["message_id"],
+                importance=classification.importance,
+                category=classification.category,
+                confidence=classification.confidence,
+            )
+
+            results.append(
+                {
+                    "message_id": email["message_id"],
+                    "subject": email.get("subject", "")[:50],
+                    "old_importance": current_importance,
+                    "new_importance": classification.importance,
+                    "old_category": current_category,
+                    "new_category": classification.category,
+                    "confidence": classification.confidence,
+                }
+            )
+            reclassified += 1
+
+        except Exception as e:
+            failed += 1
+            logger.error(f"Failed to re-classify {email['message_id']}: {e}")
+
+    print(
+        json.dumps(
+            success_response(
+                data={
+                    "reclassified": reclassified,
+                    "failed": failed,
+                    "results": results,
+                }
+            ),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 def cmd_rebuild_index(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
     """Rebuild ChromaDB index for vector search."""
     client = get_client(config, getattr(args, "account", None))
@@ -2151,6 +2224,33 @@ def main():
     )
     reclassify_p.add_argument("--account", help="Account the email belongs to")
 
+    # llm-reclassify
+    llm_reclassify_p = subparsers.add_parser(
+        "llm-reclassify", help="Re-classify emails using LLM (for normal/uncategorized emails)"
+    )
+    llm_reclassify_p.add_argument(
+        "--importance",
+        action="store_true",
+        help="Only re-classify importance level",
+    )
+    llm_reclassify_p.add_argument(
+        "--category",
+        action="store_true",
+        help="Only re-classify category",
+    )
+    llm_reclassify_p.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="Max emails to re-classify (default: 50)",
+    )
+    llm_reclassify_p.add_argument(
+        "--all",
+        action="store_true",
+        help="Re-classify all emails, not just normal/uncategorized",
+    )
+    llm_reclassify_p.add_argument("--account", help="Account to re-classify emails from")
+
     # batch-mark
     batch_mark_p = subparsers.add_parser("batch-mark", help="Batch mark emails as read/starred")
     batch_mark_p.add_argument("message_ids", nargs="*", help="Message IDs to mark")
@@ -2260,6 +2360,8 @@ def main():
         cmd_classify(args, config, db)
     elif args.command == "reclassify":
         cmd_reclassify(args, config, db)
+    elif args.command == "llm-reclassify":
+        cmd_llm_reclassify(args, config, db)
     elif args.command == "batch-mark":
         cmd_batch_mark(args, config, db)
     elif args.command == "tag":

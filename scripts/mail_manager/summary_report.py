@@ -70,14 +70,16 @@ def group_emails_by_sender(emails: list[dict[str, Any]]) -> dict[str, list[dict[
     """Group emails by sender address.
 
     Groups a list of email dictionaries by their sender field, sorting
-    each group by date. Emails with missing or empty sender are skipped.
+    each group by date. Emails with missing or empty sender are grouped
+    under "未知发件人" (Unknown Sender).
 
     Args:
         emails: List of email dictionaries with 'sender' and 'date' fields.
 
     Returns:
         Dict mapping sender email addresses to lists of emails from that sender.
-        Each list is sorted by date (ascending).
+        Each list is sorted by date (ascending). Emails without sender are
+        grouped under "未知发件人".
 
     Example:
         >>> emails = [
@@ -93,20 +95,26 @@ def group_emails_by_sender(emails: list[dict[str, Any]]) -> dict[str, list[dict[
     if not emails:
         return {}
 
-    # Filter out emails with missing or empty sender
-    valid_emails = [e for e in emails if e.get("sender")]
+    UNKNOWN_SENDER = "未知发件人"
 
-    if not valid_emails:
+    # Process all emails - don't skip any
+    processed_emails = []
+    for e in emails:
+        sender = e.get("sender", "")
+        if not sender or not sender.strip():
+            e = {**e, "sender": UNKNOWN_SENDER}
+        processed_emails.append(e)
+
+    if not processed_emails:
         return {}
 
     # Sort by sender first (required for groupby), then by date within groups
-    sorted_emails = sorted(valid_emails, key=lambda e: (e.get("sender", ""), e.get("date")))
+    sorted_emails = sorted(processed_emails, key=lambda e: (e.get("sender", ""), e.get("date")))
 
     # Group by sender
     result: dict[str, list[dict[str, Any]]] = {}
     for sender, group in groupby(sorted_emails, key=lambda e: e.get("sender", "")):
-        if sender:  # Double-check sender is not empty
-            result[sender] = sorted(list(group), key=lambda e: e.get("date"))
+        result[sender] = sorted(list(group), key=lambda e: e.get("date"))
 
     return result
 
@@ -365,7 +373,12 @@ def format_summary_report(
     sections.append("")
 
     total_emails = sum(len(emails) for emails in sender_summaries.values())
-    sections.append(f"*Total emails: {total_emails} from {len(sender_summaries)} senders*")
+    replied_count = sum(
+        1 for emails in sender_summaries.values() for email, _ in emails if email.get("is_replied")
+    )
+    sections.append(
+        f"*Total emails: {total_emails} from {len(sender_summaries)} senders ({replied_count} 已回复)*"
+    )
     sections.append("")
 
     for sender, email_summaries in sender_summaries.items():
@@ -383,7 +396,20 @@ def format_summary_report(
             else:
                 date_str = "Unknown"
 
-            sections.append(f"#### {subject}")
+            # Check reply status
+            is_replied = email.get("is_replied", False)
+            replied_at = email.get("replied_at")
+            reply_status = ""
+            if is_replied:
+                if replied_at:
+                    if isinstance(replied_at, datetime):
+                        reply_status = f" ✅ 已回复 ({replied_at.strftime('%Y-%m-%d')})"
+                    else:
+                        reply_status = f" ✅ 已回复 ({str(replied_at)[:10]})"
+                else:
+                    reply_status = " ✅ 已回复"
+
+            sections.append(f"#### {subject}{reply_status}")
             sections.append(f"*Date: {date_str}*")
             sections.append("")
 
@@ -484,6 +510,7 @@ def generate_email_summary_report(
     # Step 3: Generate summaries per sender
     sender_summaries: dict[str, list[tuple[dict[str, Any], EmailSummary]]] = {}
     all_summaries: dict[str, list[EmailSummary]] = {}
+    failed_emails: list[dict[str, Any]] = []
 
     for sender, sender_emails in sender_groups.items():
         sender_summaries[sender] = []
@@ -494,9 +521,18 @@ def generate_email_summary_report(
                 summary = summarize_email(llm_client, email)
                 sender_summaries[sender].append((email, summary))
                 all_summaries[sender].append(summary)
-            except Exception:
-                # Skip emails that fail to summarize
-                continue
+            except Exception as e:
+                failed_emails.append(email)
+                fallback = EmailSummary(
+                    subject=email.get("subject", "无主题"),
+                    key_points=["(摘要生成失败)"],
+                    action_items=[],
+                    deadline=None,
+                    priority="medium",
+                    one_liner=f"摘要失败: {str(e)[:50]}",
+                )
+                sender_summaries[sender].append((email, fallback))
+                all_summaries[sender].append(fallback)
 
     # Step 4: Generate overall summary
     overall = generate_overall_summary(llm_client, all_summaries)

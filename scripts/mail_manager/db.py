@@ -124,6 +124,12 @@ class MailDatabase:
             if "manual_override" not in columns:
                 cursor.execute("ALTER TABLE emails ADD COLUMN manual_override BOOLEAN DEFAULT 0")
 
+            # Reply status columns migration
+            if "is_replied" not in columns:
+                cursor.execute("ALTER TABLE emails ADD COLUMN is_replied BOOLEAN DEFAULT 0")
+            if "replied_at" not in columns:
+                cursor.execute("ALTER TABLE emails ADD COLUMN replied_at DATETIME")
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS attachments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

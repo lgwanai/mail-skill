@@ -89,3 +89,26 @@ Focus on:
 4. What should be prioritized?
 
 Return only the JSON object, no additional text."""
+
+EMAIL_CLASSIFICATION_PROMPT = """分析以下邮件，判断其重要性和类别。
+
+发件人: {sender}
+主题: {subject}
+内容摘要: {body}
+
+请按以下 JSON 格式返回分类结果：
+{"importance": "critical/high/normal/low", "category": "work/personal/notification/promo", "reason": "简短说明分类理由"}
+
+重要性说明：
+- critical: 紧急重要，需要立即处理（如老板/客户要求、截止日期临近）
+- high: 重要但不紧急，需要优先处理（如工作安排、项目相关）
+- normal: 普通邮件，按正常流程处理
+- low: 低优先级，可稍后处理（如通知、订阅）
+
+类别说明：
+- work: 工作相关（项目、会议、任务安排等）
+- personal: 个人相关（私人事务、朋友往来）
+- notification: 系统通知（账单、提醒、自动邮件）
+- promo: 营销推广（广告、促销、订阅内容）
+
+只返回 JSON，不要其他内容。"""

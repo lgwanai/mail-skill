@@ -156,8 +156,8 @@ class TestGroupEmailsBySender:
             "charlie@example.com",
         }
 
-    def test_skips_emails_without_sender(self) -> None:
-        """Test emails with missing/None sender are skipped."""
+    def test_groups_emails_without_sender_under_unknown(self) -> None:
+        """Test emails with missing/None sender are grouped under '未知发件人'."""
         emails = [
             {
                 "message_id": "msg-1@example.com",
@@ -182,8 +182,10 @@ class TestGroupEmailsBySender:
             },
         ]
         result = group_emails_by_sender(emails)
-        assert len(result) == 1
+        assert len(result) == 2
         assert "alice@example.com" in result
+        assert "未知发件人" in result
+        assert len(result["未知发件人"]) == 2
 
     def test_groups_sorted_by_date(self) -> None:
         """Test emails within each group are sorted by date."""
@@ -479,7 +481,11 @@ class TestOverallSummary:
         import json
         from unittest.mock import MagicMock
 
-        from mail_manager.summary_report import EmailSummary, OverallSummary, generate_overall_summary
+        from mail_manager.summary_report import (
+            EmailSummary,
+            OverallSummary,
+            generate_overall_summary,
+        )
 
         mock_llm = MagicMock()
         mock_llm.chat.return_value = MagicMock(
@@ -488,10 +494,18 @@ class TestOverallSummary:
                     "overview": "Two senders with project updates",
                     "key_themes": ["Project progress", "Planning"],
                     "all_action_items": [
-                        {"item": "Review API design", "sender": "alice@example.com", "priority": "high"}
+                        {
+                            "item": "Review API design",
+                            "sender": "alice@example.com",
+                            "priority": "high",
+                        }
                     ],
                     "upcoming_deadlines": [
-                        {"date": "2024-01-20", "description": "API design review", "sender": "alice@example.com"}
+                        {
+                            "date": "2024-01-20",
+                            "description": "API design review",
+                            "sender": "alice@example.com",
+                        }
                     ],
                     "recommended_priority": ["Review API design from Alice"],
                 }
@@ -575,10 +589,14 @@ class TestOverallSummary:
 
         sender_summaries = {
             "alice@example.com": [
-                EmailSummary(subject="Email 1", action_items=["Task 1"], priority="high", one_liner="")
+                EmailSummary(
+                    subject="Email 1", action_items=["Task 1"], priority="high", one_liner=""
+                )
             ],
             "bob@example.com": [
-                EmailSummary(subject="Email 2", action_items=["Task 2"], priority="medium", one_liner="")
+                EmailSummary(
+                    subject="Email 2", action_items=["Task 2"], priority="medium", one_liner=""
+                )
             ],
         }
 
