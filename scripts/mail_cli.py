@@ -2040,8 +2040,8 @@ def main():
     fetch_p.add_argument("--account", help="Email account to use")
     fetch_p.add_argument(
         "--folder",
-        default="INBOX",
-        help="Folder to fetch from. Use 'ALL' to fetch from all folders, or comma-separated names like 'INBOX,Sent'",
+        default="ALL",
+        help="Folder to fetch from. Default 'ALL' fetches all folders including Sent. Use comma-separated names like 'INBOX,Sent' for specific folders.",
     )
     fetch_p.add_argument("--limit", type=int, default=50, help="Max emails to fetch per folder")
     fetch_p.add_argument("--days", type=int, default=7, help="Fetch emails from last N days")
