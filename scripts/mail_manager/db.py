@@ -32,16 +32,13 @@ class MailDatabase:
             os.makedirs(chroma_dir, exist_ok=True)
             self._chroma_client = chromadb.PersistentClient(path=chroma_dir)
 
-            # Use environment variables to configure embedding function if available
-            api_key = os.getenv("OPENAI_API_KEY")
-            api_base = os.getenv("OPENAI_API_BASE")
-            ef: Any  # Embedding function type varies based on provider
+            # Use EMBEDDING_* env vars for cloud embedding, fallback to local model
+            api_key = os.getenv("EMBEDDING_API_KEY")
+            api_base = os.getenv("EMBEDDING_API_BASE")
+            ef: Any
             if api_key:
-                # Some OpenAI compatible endpoints (like siliconflow) might need adjusting the path
-                # Standard OpenAI path is /v1/embeddings, but chromadb appends /embeddings automatically
-                # So we should be careful with OPENAI_API_BASE
                 if api_base and api_base.endswith("/embeddings"):
-                    api_base = api_base[:-11]  # Remove /embeddings so chromadb can append it
+                    api_base = api_base[:-11]
 
                 ef = embedding_functions.OpenAIEmbeddingFunction(
                     api_key=api_key,
@@ -49,7 +46,6 @@ class MailDatabase:
                     model_name=os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-3-small"),
                 )
             else:
-                # Default to local model, allow override via EMBEDDING_MODEL_NAME
                 local_model = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
                 if local_model == "all-MiniLM-L6-v2":
                     ef = embedding_functions.DefaultEmbeddingFunction()
@@ -118,9 +114,13 @@ class MailDatabase:
             if "importance" not in columns:
                 cursor.execute("ALTER TABLE emails ADD COLUMN importance TEXT DEFAULT 'normal'")
             if "category" not in columns:
-                cursor.execute("ALTER TABLE emails ADD COLUMN category TEXT DEFAULT 'uncategorized'")
+                cursor.execute(
+                    "ALTER TABLE emails ADD COLUMN category TEXT DEFAULT 'uncategorized'"
+                )
             if "classification_confidence" not in columns:
-                cursor.execute("ALTER TABLE emails ADD COLUMN classification_confidence REAL DEFAULT 0.0")
+                cursor.execute(
+                    "ALTER TABLE emails ADD COLUMN classification_confidence REAL DEFAULT 0.0"
+                )
             if "manual_override" not in columns:
                 cursor.execute("ALTER TABLE emails ADD COLUMN manual_override BOOLEAN DEFAULT 0")
 
@@ -149,7 +149,9 @@ class MailDatabase:
             # Classification indexes
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_importance ON emails(importance)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_category ON emails(category)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_classification_confidence ON emails(classification_confidence)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_classification_confidence ON emails(classification_confidence)"
+            )
 
             # Migration: add content_text column to attachments if it doesn't exist
             cursor.execute("PRAGMA table_info(attachments)")
@@ -867,9 +869,7 @@ class MailDatabase:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT labels FROM emails WHERE message_id = ?", (message_id,)
-            )
+            cursor.execute("SELECT labels FROM emails WHERE message_id = ?", (message_id,))
             row = cursor.fetchone()
             if row and row["labels"]:
                 return json.loads(row["labels"])

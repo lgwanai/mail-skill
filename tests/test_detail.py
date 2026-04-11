@@ -2,8 +2,12 @@
 Unit tests for email detail formatting functions.
 
 Tests cover Markdown output formatting for email detail views including
-headers, classification info, attachments, and thread context.
+headers, classification info, attachments with file paths, and thread context.
 """
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock
 
 from mail_manager.detail import (
     format_attachments_detail,
@@ -85,9 +89,7 @@ class TestFormatEmailDetail:
 
         result = format_email_detail(email)
 
-        # Should not have Cc line
         assert "**Cc:**" not in result
-        # But should still have other fields
         assert "**From:**" in result
         assert "**To:**" in result
 
@@ -112,8 +114,8 @@ class TestFormatEmailDetail:
         assert "**Importance:** high" in result
         assert "**Category:** work" in result
 
-    def test_format_email_detail_includes_attachments_when_present(self) -> None:
-        """Test that attachments are shown when available."""
+    def test_format_email_detail_includes_attachments_with_paths(self) -> None:
+        """Test that attachments are shown with file paths."""
         email = {
             "message_id": "test-123@example.com",
             "subject": "Report",
@@ -132,11 +134,39 @@ class TestFormatEmailDetail:
             ],
         }
 
-        result = format_email_detail(email, port=8080, attachments_dir="/path/to")
+        result = format_email_detail(email)
 
         assert "### Attachments" in result
         assert "report.pdf" in result
-        assert "http://127.0.0.1:8080" in result
+        assert "Path:" in result
+        assert "/path/to/report.pdf" in result
+
+    def test_format_email_detail_with_thread_timeline(self) -> None:
+        """Test that thread timeline is included when provided."""
+        email = {
+            "message_id": "msg-2@example.com",
+            "subject": "Re: Original Subject",
+            "sender": "sender@example.com",
+            "recipient": "recipient@example.com",
+            "date": "2024-01-15 10:30:00",
+            "body_text": "Reply content.",
+        }
+        timeline = [
+            {
+                "message_id": "msg-1@example.com",
+                "subject": "Original Subject",
+                "date": "2024-01-14 09:00:00",
+            },
+            {
+                "message_id": "msg-2@example.com",
+                "subject": "Re: Original Subject",
+                "date": "2024-01-15 10:30:00",
+            },
+        ]
+
+        result = format_email_detail(email, thread_timeline=timeline)
+
+        assert "### Thread Context" in result
 
 
 class TestFormatHeaders:
@@ -283,8 +313,8 @@ class TestFormatClassification:
 class TestFormatAttachmentsDetail:
     """Tests for format_attachments_detail function."""
 
-    def test_format_attachments_detail_generates_preview_urls(self) -> None:
-        """Test that format_attachments_detail generates preview URLs."""
+    def test_format_attachments_detail_shows_file_paths(self) -> None:
+        """Test that format_attachments_detail shows file paths."""
         email = {
             "message_id": "test-123@example.com",
             "attachments": [
@@ -297,36 +327,37 @@ class TestFormatAttachmentsDetail:
             ],
         }
 
-        result = format_attachments_detail(email, port=8080, attachments_dir="/attachments")
+        result = format_attachments_detail(email)
 
         assert "### Attachments" in result
-        assert "[report.pdf]" in result
-        assert "http://127.0.0.1:8080" in result
+        assert "report.pdf" in result
+        assert "Path:" in result
+        assert "/attachments/test-123/report.pdf" in result
 
-    def test_format_attachments_detail_shows_filename_size_and_type(self) -> None:
-        """Test that format_attachments_detail shows filename, size, and content type."""
+    def test_format_attachments_detail_shows_filename_and_size(self) -> None:
+        """Test that format_attachments_detail shows filename and size."""
         email = {
             "message_id": "test-123@example.com",
             "attachments": [
                 {
                     "filename": "report.pdf",
                     "content_type": "application/pdf",
-                    "size": 2457600,  # 2.4 MB
+                    "size": 2457600,
                     "local_path": "/attachments/test-123/report.pdf",
                 },
                 {
                     "filename": "image.png",
                     "content_type": "image/png",
-                    "size": 159744,  # 156 KB
+                    "size": 159744,
                     "local_path": "/attachments/test-123/image.png",
-                }
+                },
             ],
         }
 
-        result = format_attachments_detail(email, port=8080, attachments_dir="/attachments")
+        result = format_attachments_detail(email)
 
         assert "report.pdf" in result
-        assert "2.3 MB" in result  # 2457600 bytes = 2.34 MB formatted as 2.3 MB
+        assert "2.3 MB" in result
         assert "image.png" in result
         assert "156 KB" in result
 
@@ -337,27 +368,73 @@ class TestFormatAttachmentsDetail:
             "attachments": [],
         }
 
-        result = format_attachments_detail(email, port=8080, attachments_dir="/attachments")
+        result = format_attachments_detail(email)
 
         assert result == ""
 
-    def test_format_attachments_detail_includes_port_in_url(self) -> None:
-        """Test that port is included in URL generation."""
+    def test_format_attachments_detail_with_summary(self) -> None:
+        """Test that format_attachments_detail shows content summary when db is provided."""
         email = {
             "message_id": "test-123@example.com",
             "attachments": [
                 {
-                    "filename": "doc.pdf",
+                    "filename": "report.pdf",
                     "content_type": "application/pdf",
                     "size": 1024,
-                    "local_path": "/attachments/test-123/doc.pdf",
+                    "local_path": "/attachments/test-123/report.pdf",
                 }
             ],
         }
 
-        result = format_attachments_detail(email, port=9999, attachments_dir="/attachments")
+        mock_db = MagicMock()
+        mock_db.get_attachment_content.return_value = "This is the content of the PDF document."
 
-        assert "http://127.0.0.1:9999" in result
+        result = format_attachments_detail(email, db=mock_db, include_summary=True)
+
+        assert "Summary:" in result
+        assert "This is the content" in result
+        mock_db.get_attachment_content.assert_called_once_with("/attachments/test-123/report.pdf")
+
+    def test_format_attachments_detail_summary_unparsed(self) -> None:
+        """Test that format_attachments_detail shows unparsed message when no content."""
+        email = {
+            "message_id": "test-123@example.com",
+            "attachments": [
+                {
+                    "filename": "report.pdf",
+                    "content_type": "application/pdf",
+                    "size": 1024,
+                    "local_path": "/attachments/test-123/report.pdf",
+                }
+            ],
+        }
+
+        mock_db = MagicMock()
+        mock_db.get_attachment_content.return_value = None
+
+        result = format_attachments_detail(email, db=mock_db, include_summary=True)
+
+        assert "Summary:" in result
+        assert "未解析" in result
+
+    def test_format_attachments_detail_no_local_path(self) -> None:
+        """Test that format_attachments_detail handles missing local_path."""
+        email = {
+            "message_id": "test-123@example.com",
+            "attachments": [
+                {
+                    "filename": "report.pdf",
+                    "content_type": "application/pdf",
+                    "size": 1024,
+                    "local_path": "",
+                }
+            ],
+        }
+
+        result = format_attachments_detail(email)
+
+        assert "report.pdf" in result
+        assert "无本地文件" in result
 
 
 class TestFormatThreadContext:
@@ -437,9 +514,8 @@ class TestFormatThreadContext:
 
         result = format_thread_context(email, timeline, current_message_id)
 
-        # Current email should be bolded, format is "**[Current] Subject**"
         assert "[Current]" in result
-        assert "**" in result  # Has bold markers
+        assert "**" in result
 
     def test_format_thread_context_returns_empty_if_no_thread(self) -> None:
         """Test that format_thread_context returns empty string if no thread context."""
@@ -459,7 +535,6 @@ class TestFormatThreadContext:
 
         result = format_thread_context(email, timeline, current_message_id)
 
-        # Single email with no thread should return empty
         assert result == ""
 
     def test_format_thread_context_truncates_long_subjects(self) -> None:
@@ -486,5 +561,4 @@ class TestFormatThreadContext:
 
         result = format_thread_context(email, timeline, current_message_id)
 
-        # Subject should be truncated
-        assert len(result) < 500  # Reasonable length check
+        assert len(result) < 500

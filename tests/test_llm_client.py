@@ -17,7 +17,7 @@ class TestLLMClientInit:
         """Test LLMClient initializes with OpenAI SDK."""
         from scripts.mail_manager.llm.client import LLMClient
 
-        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test-key"}):
             with patch("scripts.mail_manager.llm.client.OpenAI") as mock_openai:
                 mock_client = MagicMock()
                 mock_openai.return_value = mock_client
@@ -33,7 +33,7 @@ class TestLLMClientInit:
 
         with patch.dict(
             "os.environ",
-            {"OPENAI_API_KEY": "test-key", "OPENAI_API_BASE": "https://api.example.com/v1"},
+            {"LLM_API_KEY": "test-key", "LLM_API_BASE": "https://api.example.com/v1"},
         ):
             with patch("scripts.mail_manager.llm.client.OpenAI") as mock_openai:
                 llm = LLMClient()
@@ -48,7 +48,7 @@ class TestLLMClientInit:
 
         with patch.dict(
             "os.environ",
-            {"OPENAI_API_KEY": "test-key", "LLM_MODEL_NAME": "gpt-4o"},
+            {"LLM_API_KEY": "test-key", "LLM_MODEL_NAME": "gpt-4o"},
         ):
             with patch("scripts.mail_manager.llm.client.OpenAI"):
                 llm = LLMClient()
@@ -59,7 +59,7 @@ class TestLLMClientInit:
         """Test LLMClient uses default model when not specified."""
         from scripts.mail_manager.llm.client import LLMClient
 
-        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}, clear=False):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test-key"}, clear=False):
             # Remove LLM_MODEL_NAME if present
             import os
 
@@ -77,7 +77,7 @@ class TestLLMClientChat:
         """Test chat() returns LLMResponse with content, model, usage."""
         from scripts.mail_manager.llm.client import LLMClient, LLMResponse
 
-        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test-key"}):
             with patch("scripts.mail_manager.llm.client.OpenAI") as mock_openai:
                 mock_client = MagicMock()
                 mock_openai.return_value = mock_client
@@ -106,7 +106,7 @@ class TestLLMClientChat:
         """Test chat() passes messages array correctly to OpenAI."""
         from scripts.mail_manager.llm.client import LLMClient
 
-        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test-key"}):
             with patch("scripts.mail_manager.llm.client.OpenAI") as mock_openai:
                 mock_client = MagicMock()
                 mock_openai.return_value = mock_client
@@ -135,7 +135,7 @@ class TestLLMClientChat:
         """Test chat() respects temperature and max_tokens parameters."""
         from scripts.mail_manager.llm.client import LLMClient
 
-        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test-key"}):
             with patch("scripts.mail_manager.llm.client.OpenAI") as mock_openai:
                 mock_client = MagicMock()
                 mock_openai.return_value = mock_client
@@ -169,7 +169,7 @@ class TestLLMClientChatWithHistory:
         """Test chat_with_history() builds message array correctly."""
         from scripts.mail_manager.llm.client import LLMClient
 
-        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test-key"}):
             with patch("scripts.mail_manager.llm.client.OpenAI") as mock_openai:
                 mock_client = MagicMock()
                 mock_openai.return_value = mock_client
@@ -215,7 +215,7 @@ class TestLLMClientErrorHandling:
         from mail_manager.errors import MailSkillError
         from openai import APIError
 
-        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test-key"}):
             with patch("scripts.mail_manager.llm.client.OpenAI") as mock_openai:
                 mock_client = MagicMock()
                 mock_openai.return_value = mock_client
@@ -241,7 +241,7 @@ class TestLLMClientErrorHandling:
         from mail_manager.errors import MailSkillError
         from openai import RateLimitError
 
-        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test-key"}):
             with patch("scripts.mail_manager.llm.client.OpenAI") as mock_openai:
                 mock_client = MagicMock()
                 mock_openai.return_value = mock_client
@@ -267,7 +267,7 @@ class TestLLMClientTimeout:
         """Test LLMClient has default timeout configuration."""
         from scripts.mail_manager.llm.client import LLMClient
 
-        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test-key"}):
             with patch("scripts.mail_manager.llm.client.OpenAI") as mock_openai:
                 mock_client = MagicMock()
                 mock_openai.return_value = mock_client
@@ -283,7 +283,7 @@ class TestLLMClientTimeout:
 
         with patch.dict(
             "os.environ",
-            {"OPENAI_API_KEY": "test-key", "LLM_TIMEOUT": "60"},
+            {"LLM_API_KEY": "test-key", "LLM_TIMEOUT": "60"},
         ):
             with patch("scripts.mail_manager.llm.client.OpenAI") as mock_openai:
                 llm = LLMClient()

@@ -14,6 +14,21 @@ from openai import APIError, OpenAI, RateLimitError
 from mail_manager.errors import MailSkillError
 
 
+class AIConfigError(Exception):
+    """Raised when AI features are not configured."""
+
+    pass
+
+
+def is_ai_enabled() -> bool:
+    """Check if AI features are enabled (configured).
+
+    Returns:
+        True if LLM_API_KEY is configured, False otherwise.
+    """
+    return bool(os.getenv("LLM_API_KEY"))
+
+
 @dataclass
 class LLMResponse:
     """Standard LLM response structure."""
@@ -31,13 +46,22 @@ class LLMClient:
         """Initialize LLM client with environment configuration.
 
         Uses environment variables:
-        - OPENAI_API_KEY: Required for API access
-        - OPENAI_API_BASE: Optional, for custom endpoints
+        - LLM_API_KEY: Required for API access
+        - LLM_API_BASE: Optional, for custom endpoints
         - LLM_MODEL_NAME: Model for chat completions (default: gpt-4o-mini)
         - LLM_TIMEOUT: Request timeout in seconds (default: 30)
+
+        Raises:
+            AIConfigError: If LLM_API_KEY is not configured.
         """
-        api_key = os.getenv("OPENAI_API_KEY")
-        api_base = os.getenv("OPENAI_API_BASE")
+        api_key = os.getenv("LLM_API_KEY")
+        if not api_key:
+            raise AIConfigError(
+                "AI features not configured. "
+                "Please set LLM_API_KEY in config.txt to enable AI features."
+            )
+
+        api_base = os.getenv("LLM_API_BASE")
         timeout = int(os.getenv("LLM_TIMEOUT", "30"))
 
         self.client = OpenAI(api_key=api_key, base_url=api_base, timeout=timeout)

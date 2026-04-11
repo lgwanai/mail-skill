@@ -1,6 +1,11 @@
 """
 Attachment server module for serving email attachments via local HTTP.
 
+.. deprecated::
+    This module is deprecated and will be removed in a future version.
+    Attachment preview now uses direct file paths instead of HTTP server.
+    See Phase 8 in .planning/phases/08-server/ for migration details.
+
 Provides a secure local HTTP server that only accepts localhost connections
 and prevents path traversal attacks.
 """
@@ -42,9 +47,7 @@ class ServerState:
     def save(self, path: Path) -> None:
         """Save state to a JSON file."""
         with open(path, "w") as f:
-            json.dump(
-                {"port": self.port, "pid": self.pid, "started_at": self.started_at}, f
-            )
+            json.dump({"port": self.port, "pid": self.pid, "started_at": self.started_at}, f)
 
     @classmethod
     def load(cls, path: Path) -> ServerState | None:
@@ -94,9 +97,7 @@ def find_available_port(port_range: tuple[int, int] = DEFAULT_PORT_RANGE) -> int
                 return port
         except OSError:
             continue
-    raise PortUnavailableError(
-        f"No available port in range {start_port}-{end_port}"
-    )
+    raise PortUnavailableError(f"No available port in range {start_port}-{end_port}")
 
 
 class AttachmentHandler(SimpleHTTPRequestHandler):
@@ -135,9 +136,7 @@ class AttachmentHandler(SimpleHTTPRequestHandler):
             full_path.relative_to(self.attachments_dir.resolve())
         except ValueError:
             logger.warning(f"Path traversal blocked: {path} -> {full_path}")
-            raise PermissionError(
-                "Access denied: path escapes attachments directory"
-            ) from None
+            raise PermissionError("Access denied: path escapes attachments directory") from None
 
         # Check for symlinks that point outside attachments directory
         if full_path.is_symlink():

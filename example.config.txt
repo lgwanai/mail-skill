@@ -21,27 +21,26 @@ MAIL_ACCOUNT_1_USE_SSL=true
 # MAIL_ACCOUNT_2_USE_SSL=true
 
 # ============================================================
-# AI 功能配置 (Phase 6-7 新增)
+# AI 功能配置（可选，不配置也能正常使用邮件收发、搜索等基础功能）
 # ============================================================
 
-# --- LLM 配置 (用于 AI 回复、邮件摘要等功能) ---
-# 必须配置，否则 AI 功能无法使用
-OPENAI_API_KEY=your_openai_api_key
-# 可选：自定义 API 地址（如使用 Azure OpenAI 或自部署服务）
-# OPENAI_API_BASE=https://api.openai.com/v1
-# 可选：指定模型名称（默认 gpt-4o-mini）
-LLM_MODEL_NAME=gpt-4o-mini
-# 可选：请求超时时间（默认 30 秒）
-LLM_TIMEOUT=30
+# --- LLM 配置 (用于 AI 回复、邮件摘要、线程摘要等) ---
+# 支持所有 OpenAI 兼容的 API（DeepSeek、硅基流动、通义千问等）
+# 不配置则无法使用 AI 回复、邮件摘要报告、线程摘要等功能
+# LLM_API_KEY=your_api_key
+# LLM_API_BASE=https://api.deepseek.com/v1
+# LLM_MODEL_NAME=gpt-4o-mini
+# LLM_TIMEOUT=30
 
-# --- 向量检索配置 (用于语义搜索) ---
-# 如果配置了 OPENAI_API_KEY，默认使用云端 embedding
-# 可选：指定 embedding 模型
-# EMBEDDING_MODEL_NAME=text-embedding-3-small
+# --- Embedding 配置 (用于语义/向量搜索) ---
+# 可与 LLM 使用不同的供应商（如 LLM 用 DeepSeek，Embedding 用阿里/本地）
+# 不配置则使用本地模型（all-MiniLM-L6-v2），语义搜索效果较差
+# EMBEDDING_API_KEY=your_api_key
+# EMBEDDING_API_BASE=https://api.siliconflow.cn/v1
+# EMBEDDING_MODEL_NAME=BAAI/bge-large-zh-v1.5
 
-# --- Rerank 模型配置 (用于混合检索重排) ---
-# 混合检索 (--hybrid) 时使用的重排模型
-# 默认使用本地模型，需先下载模型文件
+# --- Reranker 配置 (用于混合检索重排) ---
+# 默认使用本地模型
 # RERANKER_MODEL_NAME=BAAI/bge-reranker-base
 
 # ============================================================

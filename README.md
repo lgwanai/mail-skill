@@ -36,7 +36,7 @@
 ### 🎨 用户体验
 - **Web 配置界面**：通过浏览器轻松配置账户和设置
 - **精美输出**：邮件详情以 Markdown 格式呈现，阅读体验极佳
-- **附件预览**：本地 HTTP 服务器提供附件在线预览
+- **附件信息**：显示附件文件路径和内容摘要
 - **签名档**：每个账户可配置独立签名
 
 ---
@@ -58,14 +58,10 @@ cd mail-skill
 # 2. 安装依赖
 pip install -r requirements.txt
 
-# 3. 启动配置服务
-python scripts/mail_cli.py config
+# 3. 复制并编辑配置文件
+cp example.config.txt config.txt
+# 编辑 config.txt，填入你的邮箱信息
 ```
-
-打开浏览器访问显示的 URL（如 `http://127.0.0.1:8100`），完成以下配置：
-
-1. **AI 设置**：填写 OpenAI API Key（用于语义搜索、AI 回复等功能）
-2. **邮箱账户**：添加你的邮箱账户信息
 
 > **提示**：大多数邮箱（QQ、Gmail、网易等）需要使用**应用专用密码**而非登录密码。请在邮箱设置中开启 IMAP/SMTP 服务并生成授权码。
 
@@ -142,9 +138,7 @@ mail-skill/
 │   └── mail_manager/
 │       ├── client.py            # IMAP/SMTP 客户端
 │       ├── db.py                # 数据库操作（SQLite + ChromaDB）
-│       ├── config_server.py     # Web 配置服务
-│       ├── config_manager.py    # 配置管理
-│       ├── config_db.py         # 配置数据库
+│       ├── config_manager.py    # 配置管理（读取 config.txt）
 │       ├── classifier.py        # 邮件分类器
 │       ├── query_parser.py      # 自然语言查询解析
 │       ├── date_parser.py       # 中文日期解析
@@ -153,7 +147,7 @@ mail-skill/
 │       ├── thread_manager.py    # 邮件线程管理
 │       ├── summary_report.py    # 邮件摘要报告
 │       ├── reply_assistant.py   # AI 回复助手
-│       ├── server.py            # 附件预览服务器
+│       ├── server.py            # (已弃用) 附件预览服务器
 │       ├── errors.py            # 错误码定义
 │       ├── llm/                 # LLM 客户端
 │       │   ├── client.py
@@ -166,12 +160,12 @@ mail-skill/
 │           └── text_parser.py
 ├── tests/                       # 测试文件
 ├── mail_data/                   # 数据目录（运行时生成）
-│   ├── config.db                # 配置数据库
 │   └── <account>/               # 按账户隔离存储
 │       ├── mail_index.db        # 邮件索引
 │       ├── eml/                 # 原始邮件
 │       ├── attachments/         # 附件
 │       └── signature.md         # 签名档
+├── config.txt                   # 配置文件（从 example.config.txt 复制）
 ├── SKILL.md                     # Agent 技能说明
 ├── README.md                    # 本文件
 └── requirements.txt             # 依赖列表
@@ -184,11 +178,6 @@ mail-skill/
 ### v2.0.0 (2024-04)
 
 #### 新功能
-
-**Web 配置界面**
-- 新增 `config` 命令，通过浏览器进行可视化配置
-- 支持 AI 设置、存储设置、邮箱账户的 Web 管理界面
-- 配置数据存储在 SQLite 数据库中，更安全可靠
 
 **自然语言搜索**
 - 支持"上周"、"本月"、"昨天"等中文日期表达式
@@ -262,10 +251,13 @@ mail-skill/
 
 | 字段 | 说明 | 默认值 |
 |------|------|--------|
-| OPENAI_API_KEY | OpenAI API 密钥 | - |
-| OPENAI_API_BASE | API 基础 URL | https://api.openai.com/v1 |
+| LLM_API_KEY | LLM API 密钥（必填） | - |
+| LLM_API_BASE | LLM API 地址 | https://api.openai.com/v1 |
 | LLM_MODEL_NAME | 语言模型 | gpt-4o-mini |
-| EMBEDDING_MODEL_NAME | 向量模型 | text-embedding-3-small |
+| LLM_TIMEOUT | 请求超时（秒） | 30 |
+| EMBEDDING_API_KEY | Embedding API 密钥（可选，不配置则使用本地模型） | - |
+| EMBEDDING_API_BASE | Embedding API 地址 | - |
+| EMBEDDING_MODEL_NAME | 向量模型 | text-embedding-3-small / all-MiniLM-L6-v2 |
 | RERANKER_MODEL_NAME | 重排序模型 | BAAI/bge-reranker-base |
 
 ### 常见邮箱服务器配置
@@ -292,10 +284,10 @@ mail-skill/
 > 运行 `python scripts/mail_cli.py rebuild-index` 重建搜索索引。
 
 **Q: AI 功能报错？**
-> 确认已配置有效的 OpenAI API Key。可以通过 `config` 命令检查配置。
+> 确认已配置 `LLM_API_KEY`。
 
-**Q: 附件预览打不开？**
-> 附件预览服务会在首次访问时自动启动。检查 `./mail_data/<account>/` 目录下是否有附件文件。
+**Q: 如何查看附件内容？**
+> 使用 `python scripts/mail_cli.py read <message_id> -a` 可显示附件文件路径和内容摘要。需要先运行 `parse-attachments` 解析附件内容。
 
 **Q: 数据存储在哪里？**
 > 所有数据存储在 `./mail_data/` 目录下，按账户隔离。删除此目录不影响邮箱服务器上的原始数据。

@@ -306,34 +306,7 @@ python scripts/mail_cli.py templates create welcome --content "Hello {{name}}, .
 
 ## Configuration
 
-### Web UI Configuration
-
-```bash
-# Start config server (shows URL)
-python scripts/mail_cli.py config
-
-# Start on specific port
-python scripts/mail_cli.py config start --port 8080
-
-# Get config server URL
-python scripts/mail_cli.py config url
-
-# Stop config server
-python scripts/mail_cli.py config stop
-```
-
-Open the URL in browser to configure:
-- **AI Settings**: OpenAI API key, model names (LLM, embedding, reranker)
-- **Storage Settings**: Data directories, database paths
-- **Email Accounts**: IMAP/SMTP server settings
-
-### Configuration Storage
-
-Configuration is stored in SQLite at `./mail_data/config.db`.
-
-### Legacy config.txt Support
-
-For backward compatibility, `config.txt` is auto-imported on first run:
+Copy `example.config.txt` to `config.txt` and fill in your details:
 
 ```env
 # Email Account
@@ -345,11 +318,14 @@ MAIL_ACCOUNT_1_SMTP_SERVER=smtp.gmail.com
 MAIL_ACCOUNT_1_SMTP_PORT=465
 MAIL_ACCOUNT_1_USE_SSL=true
 
-# AI Configuration
-OPENAI_API_KEY=your_openai_api_key
-LLM_MODEL_NAME=gpt-4o-mini
-EMBEDDING_MODEL_NAME=text-embedding-3-small
-RERANKER_MODEL_NAME=BAAI/bge-reranker-base
+# AI Configuration (Optional - LLM and Embedding can use different providers)
+# LLM_API_KEY=your_api_key
+# LLM_API_BASE=https://api.deepseek.com/v1
+# LLM_MODEL_NAME=deepseek-chat
+# EMBEDDING_API_KEY=your_api_key
+# EMBEDDING_API_BASE=https://api.siliconflow.cn/v1
+# EMBEDDING_MODEL_NAME=BAAI/bge-large-zh-v1.5
+# RERANKER_MODEL_NAME=BAAI/bge-reranker-base
 ```
 
 ## Data Storage
@@ -358,7 +334,6 @@ RERANKER_MODEL_NAME=BAAI/bge-reranker-base
 
 ```
 mail_data/
-├── config.db                    # Configuration database
 ├── <account_sanitized>/         # Per-account storage
 │   ├── mail_index.db           # Email index (SQLite + FTS5 + ChromaDB)
 │   ├── eml/                    # Raw email files

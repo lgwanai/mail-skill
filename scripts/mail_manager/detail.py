@@ -2,15 +2,17 @@
 Email detail formatting module for Markdown output.
 
 Provides functions to format email details as Markdown for CLI display,
-including headers, classification info, attachments with preview links,
+including headers, classification info, attachments with file paths,
 and thread context.
 """
 
 from __future__ import annotations
 
 import os
-from typing import Any
-from urllib.parse import quote
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from scripts.mail_manager.db import MailDatabase
 
 
 def _format_header_line(label: str, value: str | None) -> str:
@@ -59,7 +61,25 @@ def _truncate_subject(subject: str, max_length: int = 50) -> str:
     """
     if len(subject) <= max_length:
         return subject
-    return subject[:max_length - 3] + "..."
+    return subject[: max_length - 3] + "..."
+
+
+def _truncate_summary(text: str, max_length: int = 200) -> str:
+    """Truncate summary text to max_length characters.
+
+    Args:
+        text: The text to truncate.
+        max_length: Maximum length (default 200).
+
+    Returns:
+        Truncated text with "..." if needed.
+    """
+    if not text:
+        return ""
+    text = text.strip().replace("\n", " ").replace("\r", "")
+    if len(text) <= max_length:
+        return text
+    return text[: max_length - 3] + "..."
 
 
 def format_headers(email: dict[str, Any]) -> str:
@@ -125,15 +145,15 @@ def format_classification(email: dict[str, Any]) -> str:
 
 def format_attachments_detail(
     email: dict[str, Any],
-    port: int,
-    attachments_dir: str,
+    db: "MailDatabase | None" = None,
+    include_summary: bool = False,
 ) -> str:
-    """Format attachments with preview URLs as Markdown.
+    """Format attachments with file paths and optional content summaries.
 
     Args:
         email: Email dictionary with attachments list.
-        port: Port number for the preview server.
-        attachments_dir: Base directory for attachments.
+        db: Optional MailDatabase for querying attachment content.
+        include_summary: Whether to include content summaries (requires db).
 
     Returns:
         Markdown-formatted attachments section, or empty string if no attachments.
@@ -149,21 +169,26 @@ def format_attachments_detail(
         size = att.get("size", 0)
         local_path = att.get("local_path", "")
 
-        # Generate preview URL
-        if local_path:
-            rel_path = os.path.relpath(local_path, attachments_dir)
-            encoded_path = quote(rel_path)
-            url = f"http://127.0.0.1:{port}/{encoded_path}"
-            size_str = _format_file_size(size)
+        size_str = _format_file_size(size)
 
-            # Format line: 1. [filename.pdf](url) - 2.3 MB
-            line = f"{i}. [{filename}]({url}) - {size_str}"
-            lines.append(line)
+        if local_path:
+            # Show absolute path
+            abs_path = os.path.abspath(local_path) if not os.path.isabs(local_path) else local_path
+            lines.append(f"{i}. **{filename}** - {size_str}")
+            lines.append(f"   - Path: `{abs_path}`")
+
+            # Add content summary if requested and db is available
+            if include_summary and db:
+                content_text = db.get_attachment_content(local_path)
+                if content_text:
+                    summary = _truncate_summary(content_text)
+                    lines.append(f"   - Summary: {summary}")
+                else:
+                    lines.append("   - Summary: (未解析)")
         else:
             # No local path, just show filename and size
-            size_str = _format_file_size(size)
-            line = f"{i}. {filename} - {size_str}"
-            lines.append(line)
+            lines.append(f"{i}. **{filename}** - {size_str}")
+            lines.append("   - Path: (无本地文件)")
 
     return "\n".join(lines)
 
@@ -219,15 +244,17 @@ def format_thread_context(
 
 def format_email_detail(
     email: dict[str, Any],
-    port: int | None = None,
-    attachments_dir: str | None = None,
+    db: "MailDatabase | None" = None,
+    include_attachment_summary: bool = False,
+    thread_timeline: list[dict[str, Any]] | None = None,
 ) -> str:
     """Format complete email detail as Markdown.
 
     Args:
         email: Email dictionary with all fields.
-        port: Optional port for attachment preview URLs.
-        attachments_dir: Optional base directory for attachments.
+        db: Optional MailDatabase for attachment content queries.
+        include_attachment_summary: Whether to include attachment content summaries.
+        thread_timeline: Optional list of emails in thread for context.
 
     Returns:
         Complete Markdown-formatted email detail.
@@ -249,12 +276,27 @@ def format_email_detail(
         sections.append("")
         sections.append(classification)
 
-    # Attachments (if available and port provided)
-    if port and attachments_dir:
-        attachments = format_attachments_detail(email, port, attachments_dir)
+    # Attachments (if available)
+    if email.get("attachments"):
+        attachments = format_attachments_detail(
+            email,
+            db=db,
+            include_summary=include_attachment_summary,
+        )
         if attachments:
             sections.append("")
             sections.append(attachments)
+
+    # Thread context (if provided)
+    if thread_timeline and len(thread_timeline) > 1:
+        thread_context = format_thread_context(
+            email,
+            thread_timeline,
+            email.get("message_id", ""),
+        )
+        if thread_context:
+            sections.append("")
+            sections.append(thread_context)
 
     # Body
     body_text = email.get("body_text", "")

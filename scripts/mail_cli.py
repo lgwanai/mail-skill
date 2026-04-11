@@ -14,7 +14,6 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from urllib.parse import quote
 
 import markdown  # type: ignore[import-untyped]
 from dotenv import load_dotenv
@@ -24,14 +23,12 @@ from jinja2 import Environment, FileSystemLoader
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mail_manager.client import MailClient
-from mail_manager.config_manager import ConfigManager, get_config_manager
-from mail_manager.config_server import ConfigServer, ensure_config_server, get_config_url
+from mail_manager.config_manager import load_config
 from mail_manager.db import MailDatabase
 from mail_manager.detail import format_email_detail
 from mail_manager.errors import ErrorCodes, error_response, success_response
 from mail_manager.llm.client import LLMClient
 from mail_manager.query_parser import ParsedQuery, match_senders, parse_natural_query
-from mail_manager.server import AttachmentServer, ServerState
 from mail_manager.summary_report import generate_email_summary_report
 from mail_manager.templates import TemplateManager
 
@@ -76,32 +73,6 @@ def get_cached_senders(db: MailDatabase, account: str) -> list[str]:
     senders = db.get_unique_senders()
     _sender_cache[cache_key] = (now, senders)
     return senders
-
-
-# Global config manager instance
-_config_manager: ConfigManager | None = None
-
-
-def load_config() -> dict[str, Any]:
-    """Load configuration from database or config.txt file.
-
-    Uses the new ConfigManager which:
-    1. Reads from SQLite config database
-    2. Falls back to config.txt environment variables
-    3. Auto-imports existing config.txt on first run
-    """
-    global _config_manager
-    if _config_manager is None:
-        _config_manager = get_config_manager()
-    return _config_manager.load_config()
-
-
-def get_cli_config_manager() -> ConfigManager:
-    """Get the global ConfigManager instance."""
-    global _config_manager
-    if _config_manager is None:
-        _config_manager = get_config_manager()
-    return _config_manager
 
 
 def get_client(config: dict[str, Any], email_account: str | None = None) -> MailClient:
@@ -642,7 +613,9 @@ def cmd_read(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
                         "snippet": (email.get("body_text", "") or "")[:200]
                         .replace("\n", " ")
                         .replace("\r", ""),
-                        "attachments": [att.get("local_path") for att in email.get("attachments", [])],
+                        "attachments": [
+                            att.get("local_path") for att in email.get("attachments", [])
+                        ],
                     }
                 ]
             },
@@ -650,22 +623,12 @@ def cmd_read(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
         print(table_md)
     else:
         # Enhanced detail view with Markdown formatting
-        # Get thread context if available
         thread_timeline = isolated_db.get_thread_timeline(args.message_id)
-
-        # Get attachment server port for preview URLs
-        port = None
-        if email.get("attachments"):
-            # Try to get or start attachment server
-            server = AttachmentServer(paths["attachments_path"])
-            try:
-                port = server.get_port()
-            except Exception:
-                port = None
 
         detail_md = format_email_detail(
             email=email,
-            port=port,
+            db=isolated_db,
+            include_attachment_summary=getattr(args, "attachment_summary", False),
             thread_timeline=thread_timeline,
         )
         print(detail_md)
@@ -1133,44 +1096,21 @@ def cmd_export(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
 
 
 def cmd_attachments(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
-    """List attachments with preview URLs."""
-    # Get account paths
+    """List attachments with file paths."""
     client = get_client(config, getattr(args, "account", None))
     paths = _get_account_paths(config, client.email)
     isolated_db = MailDatabase(paths["db_path"])
 
-    # Query emails with attachments
     results = isolated_db.search_emails(has_attachment=True, limit=args.limit)
 
-    # Check/start server
-    attachments_dir = paths["attach_path"]
-
-    # Check existing state
-    state_file = AttachmentServer.get_state_file(
-        Path(paths["root"])
-    )
-    state = ServerState.load(state_file)
-
-    if state and state.is_running():
-        port = state.port
-    else:
-        server = AttachmentServer(attachments_dir)
-        port = server.start()
-        new_state = ServerState(
-            port=port, pid=os.getpid(), started_at=datetime.now().isoformat()
-        )
-        new_state.save(state_file)
-
-    # Build output
     attachments_list: list[dict[str, Any]] = []
     for email in results:
         for att in email.get("attachments", []):
             local_path = att.get("local_path", "")
             if local_path:
-                # Generate relative path for URL
-                rel_path = os.path.relpath(local_path, attachments_dir)
-                encoded_path = quote(rel_path)
-                url = f"http://127.0.0.1:{port}/{encoded_path}"
+                abs_path = (
+                    os.path.abspath(local_path) if not os.path.isabs(local_path) else local_path
+                )
                 attachments_list.append(
                     {
                         "filename": att.get("filename"),
@@ -1178,7 +1118,7 @@ def cmd_attachments(args: Any, config: dict[str, Any], db: MailDatabase) -> None
                         "content_type": att.get("content_type"),
                         "message_id": email.get("message_id"),
                         "subject": email.get("subject"),
-                        "preview_url": url,
+                        "local_path": abs_path,
                     }
                 )
 
@@ -1186,11 +1126,10 @@ def cmd_attachments(args: Any, config: dict[str, Any], db: MailDatabase) -> None
         json.dumps(
             success_response(
                 data={
-                    "port": port,
                     "count": len(attachments_list),
                     "attachments": attachments_list,
                 },
-                message=f"Attachment server running on port {port}",
+                message=f"Found {len(attachments_list)} attachments",
             ),
             ensure_ascii=False,
             indent=2,
@@ -1341,7 +1280,12 @@ def cmd_thread(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
 
     # Use enhanced thread view formatting
     if getattr(args, "summary", False):
-        from mail_manager.llm.client import LLMClient
+        from mail_manager.llm.client import LLMClient, is_ai_enabled
+
+        if not is_ai_enabled():
+            print("AI 功能未配置。请在 config.txt 中设置 LLM_API_KEY 以启用 AI 摘要功能。")
+            return
+
         llm_client = LLMClient()
         output = format_thread_view(
             timeline=timeline,
@@ -1604,7 +1548,11 @@ def cmd_classify(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
         # Classify single email
         email = isolated_db.get_email(message_id)
         if not email:
-            print(json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, f"Email {message_id} not found")))
+            print(
+                json.dumps(
+                    error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, f"Email {message_id} not found")
+                )
+            )
             return
 
         classifier = EmailClassifier()
@@ -1664,7 +1612,11 @@ def cmd_reclassify(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
 
     email = isolated_db.get_email(message_id)
     if not email:
-        print(json.dumps(error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, f"Email {message_id} not found")))
+        print(
+            json.dumps(
+                error_response(ErrorCodes.USER_EMAIL_NOT_FOUND, f"Email {message_id} not found")
+            )
+        )
         return
 
     # Update with manual override flag
@@ -1755,16 +1707,18 @@ def cmd_rebuild_index(args: Any, config: dict[str, Any], db: MailDatabase) -> No
 def cmd_parse_attachments(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
     """Parse attachment content for enhanced search."""
     from mail_manager.attachment_parser import parse_attachment
-    from mail_manager.llm.client import LLMClient
+    from mail_manager.llm.client import LLMClient, is_ai_enabled
+
+    if not is_ai_enabled():
+        print("AI 功能未配置。请在 config.txt 中设置 LLM_API_KEY 以启用附件内容解析功能。")
+        return
 
     llm_client = LLMClient()
 
     if args.message_id:
         # Parse attachments for specific email
         cursor = db._get_connection().cursor()
-        cursor.execute(
-            "SELECT * FROM attachments WHERE message_id = ?", (args.message_id,)
-        )
+        cursor.execute("SELECT * FROM attachments WHERE message_id = ?", (args.message_id,))
         attachments = [dict(row) for row in cursor.fetchall()]
         if not attachments:
             print(f"No attachments found for email: {args.message_id}")
@@ -1772,9 +1726,7 @@ def cmd_parse_attachments(args: Any, config: dict[str, Any], db: MailDatabase) -
     elif args.all:
         # Parse all unprocessed attachments (content_text is NULL)
         cursor = db._get_connection().cursor()
-        cursor.execute(
-            "SELECT * FROM attachments WHERE content_text IS NULL OR content_text = ''"
-        )
+        cursor.execute("SELECT * FROM attachments WHERE content_text IS NULL OR content_text = ''")
         attachments = [dict(row) for row in cursor.fetchall()]
         if not attachments:
             print("No unprocessed attachments found.")
@@ -1815,7 +1767,11 @@ def cmd_ai_reply(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
         store_reply_feedback,
     )
     from mail_manager.thread_manager import get_enhanced_thread_timeline
-    from mail_manager.llm.client import LLMClient
+    from mail_manager.llm.client import LLMClient, is_ai_enabled
+
+    if not is_ai_enabled():
+        print("AI 功能未配置。请在 config.txt 中设置 LLM_API_KEY 以启用 AI 回复功能。")
+        return
 
     cursor = db._get_connection().cursor()
     cursor.execute("SELECT * FROM emails WHERE message_id = ?", (args.message_id,))
@@ -1919,6 +1875,11 @@ def cmd_summary_report(args: Any, config: dict[str, Any], db: MailDatabase) -> N
         db: MailDatabase instance (not used, we create isolated one per account).
     """
     from datetime import date, datetime
+    from mail_manager.llm.client import is_ai_enabled
+
+    if not is_ai_enabled():
+        print("AI 功能未配置。请在 config.txt 中设置 LLM_API_KEY 以启用邮件摘要报告功能。")
+        return
 
     # Get account-specific paths
     client = get_client(config, getattr(args, "account", None))
@@ -1959,6 +1920,8 @@ def cmd_summary_report(args: Any, config: dict[str, Any], db: MailDatabase) -> N
 
     try:
         # Initialize LLM client
+        from mail_manager.llm.client import LLMClient
+
         llm_client = LLMClient()
 
         # Generate the report
@@ -1978,7 +1941,10 @@ def cmd_summary_report(args: Any, config: dict[str, Any], db: MailDatabase) -> N
             print(
                 json.dumps(
                     success_response(
-                        data={"output_path": args.output, "preview": report[:200] + "..." if len(report) > 200 else report},
+                        data={
+                            "output_path": args.output,
+                            "preview": report[:200] + "..." if len(report) > 200 else report,
+                        },
                         message=f"Report saved to {args.output}",
                     )
                 )
@@ -1990,98 +1956,6 @@ def cmd_summary_report(args: Any, config: dict[str, Any], db: MailDatabase) -> N
     except Exception as e:
         logger.error(f"Failed to generate summary report: {e}")
         print(json.dumps(error_response(ErrorCodes.SERVER_DATABASE_ERROR, str(e))))
-
-
-def cmd_config(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
-    """Manage configuration via web UI.
-
-    Args:
-        args: CLI arguments with config_command.
-        config: Configuration dictionary.
-        db: MailDatabase instance.
-    """
-    config_command = getattr(args, "config_command", None)
-
-    if config_command == "start":
-        # Start config server
-        port = getattr(args, "port", None)
-        if port:
-            server = ConfigServer(port_range=(port, port))
-        else:
-            server = ConfigServer()
-
-        try:
-            port = server.start()
-            print(
-                json.dumps(
-                    success_response(
-                        data={"port": port, "url": f"http://127.0.0.1:{port}"},
-                        message=f"Config server started. Open http://127.0.0.1:{port} in your browser.",
-                    )
-                )
-            )
-            # Keep the server running (this blocks)
-            print("Press Ctrl+C to stop the server...")
-            server.thread.join()
-        except KeyboardInterrupt:
-            server.stop()
-            print(json.dumps(success_response(message="Config server stopped")))
-        except Exception as e:
-            print(json.dumps(error_response(ErrorCodes.INTERNAL_ERROR, str(e))))
-
-    elif config_command == "url":
-        # Show config server URL
-        try:
-            url = get_config_url()
-            print(
-                json.dumps(
-                    success_response(
-                        data={"url": url},
-                        message=f"Config server is running at {url}",
-                    )
-                )
-            )
-        except Exception as e:
-            print(json.dumps(error_response(ErrorCodes.INTERNAL_ERROR, str(e))))
-
-    elif config_command == "stop":
-        # Stop config server
-        existing = ConfigServer.get_running_server()
-        if existing:
-            existing.stop()
-            print(json.dumps(success_response(message="Config server stopped")))
-        else:
-            print(json.dumps(success_response(message="No config server running")))
-
-    else:
-        # No subcommand - show URL or start server
-        manager = get_config_manager()
-        if not manager.is_configured():
-            # Not configured - start server and show URL
-            url = get_config_url()
-            print(
-                json.dumps(
-                    success_response(
-                        data={"url": url},
-                        message=f"Configuration required. Open {url} in your browser to configure.",
-                    )
-                )
-            )
-        else:
-            # Already configured - show URL
-            existing = ConfigServer.get_running_server()
-            if existing and existing.port:
-                url = f"http://127.0.0.1:{existing.port}"
-            else:
-                url = get_config_url()
-            print(
-                json.dumps(
-                    success_response(
-                        data={"url": url},
-                        message=f"Config server running at {url}",
-                    )
-                )
-            )
 
 
 def main():
@@ -2127,7 +2001,9 @@ def main():
     search_p.add_argument("--is-read", type=int, choices=[0, 1], help="1 for read, 0 for unread")
     search_p.add_argument("--has-attachment", type=int, choices=[0, 1], help="1 for has attachment")
     search_p.add_argument(
-        "--importance", choices=["critical", "high", "normal", "low"], help="Filter by importance level"
+        "--importance",
+        choices=["critical", "high", "normal", "low"],
+        help="Filter by importance level",
     )
     search_p.add_argument(
         "--category",
@@ -2149,7 +2025,15 @@ def main():
     read_p = subparsers.add_parser("read", help="Read a specific email by message_id")
     read_p.add_argument("message_id", help="Message ID to read")
     read_p.add_argument("--account", help="Account to read from")
-    read_p.add_argument("--brief", action="store_true", help="Show brief table view instead of detailed Markdown")
+    read_p.add_argument(
+        "--brief", action="store_true", help="Show brief table view instead of detailed Markdown"
+    )
+    read_p.add_argument(
+        "--attachment-summary",
+        "-a",
+        action="store_true",
+        help="Show attachment content summaries (requires prior parse-attachments)",
+    )
 
     # templates
     templates_p = subparsers.add_parser("templates", help="Manage email templates")
@@ -2243,26 +2127,42 @@ def main():
     rebuild_p.add_argument("--account", help="Account to rebuild indices for")
 
     # classify
-    classify_p = subparsers.add_parser("classify", help="Classify emails by importance and category")
-    classify_p.add_argument("message_id", nargs="?", help="Message ID to classify (optional, defaults to all)")
+    classify_p = subparsers.add_parser(
+        "classify", help="Classify emails by importance and category"
+    )
+    classify_p.add_argument(
+        "message_id", nargs="?", help="Message ID to classify (optional, defaults to all)"
+    )
     classify_p.add_argument("--account", help="Account to classify emails from")
-    classify_p.add_argument("--limit", type=int, default=100, help="Max emails to classify when batch mode")
+    classify_p.add_argument(
+        "--limit", type=int, default=100, help="Max emails to classify when batch mode"
+    )
 
     # reclassify
     reclassify_p = subparsers.add_parser("reclassify", help="Manually reclassify an email")
     reclassify_p.add_argument("message_id", help="Message ID to reclassify")
-    reclassify_p.add_argument("--importance", choices=["critical", "high", "normal", "low"], help="New importance level")
-    reclassify_p.add_argument("--category", choices=["work", "personal", "notification", "promo", "uncategorized"], help="New category")
+    reclassify_p.add_argument(
+        "--importance", choices=["critical", "high", "normal", "low"], help="New importance level"
+    )
+    reclassify_p.add_argument(
+        "--category",
+        choices=["work", "personal", "notification", "promo", "uncategorized"],
+        help="New category",
+    )
     reclassify_p.add_argument("--account", help="Account the email belongs to")
 
     # batch-mark
     batch_mark_p = subparsers.add_parser("batch-mark", help="Batch mark emails as read/starred")
     batch_mark_p.add_argument("message_ids", nargs="*", help="Message IDs to mark")
-    batch_mark_p.add_argument("--read", type=int, choices=[0, 1], help="1 to mark read, 0 for unread")
+    batch_mark_p.add_argument(
+        "--read", type=int, choices=[0, 1], help="1 to mark read, 0 for unread"
+    )
     batch_mark_p.add_argument("--starred", type=int, choices=[0, 1], help="1 to star, 0 to unstar")
     batch_mark_p.add_argument("--from-search", help="Use search results as message IDs")
     batch_mark_p.add_argument("--account", help="Account")
-    batch_mark_p.add_argument("--limit", type=int, default=100, help="Max results when using --from-search")
+    batch_mark_p.add_argument(
+        "--limit", type=int, default=100, help="Max results when using --from-search"
+    )
 
     # tag
     tag_p = subparsers.add_parser("tag", help="Manage email tags")
@@ -2301,31 +2201,21 @@ def main():
     ai_reply_p.add_argument("message_id", help="Email to reply to")
     ai_reply_p.add_argument("--intent", help="Specific intent for reply")
     ai_reply_p.add_argument("--with-thread", action="store_true", help="Include thread context")
-    ai_reply_p.add_argument("--dry-run", action="store_true", help="Show suggestion without sending")
+    ai_reply_p.add_argument(
+        "--dry-run", action="store_true", help="Show suggestion without sending"
+    )
     ai_reply_p.add_argument("--account", help="Account to send from")
 
     # summary-report
-    summary_p = subparsers.add_parser("summary-report", help="Generate email summary report by sender")
+    summary_p = subparsers.add_parser(
+        "summary-report", help="Generate email summary report by sender"
+    )
     summary_p.add_argument("--account", help="Account to use")
     summary_p.add_argument("--date-from", help="Start date (YYYY-MM-DD)")
     summary_p.add_argument("--date-to", help="End date (YYYY-MM-DD)")
     summary_p.add_argument("--days", type=int, default=7, help="Days to look back")
     summary_p.add_argument("--limit", type=int, default=100, help="Max emails to process")
     summary_p.add_argument("--output", help="Output file path")
-
-    # config
-    config_p = subparsers.add_parser("config", help="Manage configuration via web UI")
-    config_subparsers = config_p.add_subparsers(dest="config_command", help="Config subcommand")
-
-    # config start
-    config_start = config_subparsers.add_parser("start", help="Start config web server")
-    config_start.add_argument("--port", type=int, help="Specific port to use (default: auto-select)")
-
-    # config url
-    config_url = config_subparsers.add_parser("url", help="Show config server URL")
-
-    # config stop
-    config_stop = config_subparsers.add_parser("stop", help="Stop config web server")
 
     args = parser.parse_args()
 
@@ -2382,8 +2272,6 @@ def main():
         cmd_ai_reply(args, config, db)
     elif args.command == "summary-report":
         cmd_summary_report(args, config, db)
-    elif args.command == "config":
-        cmd_config(args, config, db)
 
 
 if __name__ == "__main__":
