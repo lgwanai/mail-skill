@@ -1,6 +1,10 @@
 # Mail Skill Configuration
 # 请将此文件复制并重命名为 config.txt，然后填入你的邮箱信息
 
+# ============================================================
+# 邮箱账户配置
+# ============================================================
+
 # --- Account 1 ---
 MAIL_ACCOUNT_1_EMAIL=your_email@example.com
 # 密码请使用"应用专用密码（授权码）"，而不是你的登录密码
@@ -21,40 +25,71 @@ MAIL_ACCOUNT_1_USE_SSL=true
 # MAIL_ACCOUNT_2_USE_SSL=true
 
 # ============================================================
+# 存储配置
+# ============================================================
+
+# 数据存储根目录
+MAIL_STORAGE_ROOT=./mail_data
+# 附件存储路径
+MAIL_ATTACHMENT_PATH=./mail_data/attachments
+# 数据库路径
+MAIL_DB_PATH=./mail_data/mail_index.db
+
+# ============================================================
 # AI 功能配置（可选，不配置也能正常使用邮件收发、搜索等基础功能）
 # ============================================================
 
 # --- LLM 配置 (用于 AI 回复、邮件摘要、线程摘要等) ---
 # 支持所有 OpenAI 兼容的 API（DeepSeek、硅基流动、通义千问等）
 # 不配置则无法使用 AI 回复、邮件摘要报告、线程摘要等功能
+
+# LLM API 密钥（必填）
 # LLM_API_KEY=your_api_key
-# LLM_API_BASE=https://api.deepseek.com/v1
+
+# LLM API 地址（可选，不填则使用 OpenAI 默认地址）
+# DeepSeek: https://api.deepseek.com/v1
+# 硅基流动: https://api.siliconflow.cn/v1
+# 通义千问: https://dashscope.aliyuncs.com/compatible-mode/v1
+# LLM_API_BASE=https://api.openai.com/v1
+
+# LLM 模型名称（可选，默认 gpt-4o-mini）
+# DeepSeek: deepseek-chat
+# 通义千问: qwen-turbo
 # LLM_MODEL_NAME=gpt-4o-mini
+
+# LLM 请求超时时间（秒，可选，默认 30）
 # LLM_TIMEOUT=30
 
 # --- Embedding 配置 (用于语义/向量搜索) ---
 # 可与 LLM 使用不同的供应商（如 LLM 用 DeepSeek，Embedding 用阿里/本地）
-# 不配置则使用本地模型（all-MiniLM-L6-v2），语义搜索效果较差
+# 不配置 EMBEDDING_API_KEY 则使用本地模型 all-MiniLM-L6-v2
+
+# Embedding API 密钥（可选）
 # EMBEDDING_API_KEY=your_api_key
+
+# Embedding API 地址（可选）
 # EMBEDDING_API_BASE=https://api.siliconflow.cn/v1
-# EMBEDDING_MODEL_NAME=BAAI/bge-large-zh-v1.5
+
+# Embedding 模型名称（可选）
+# 云端模型默认: text-embedding-3-small
+# 本地模型默认: all-MiniLM-L6-v2
+# 推荐中文模型: BAAI/bge-large-zh-v1.5
+# EMBEDDING_MODEL_NAME=text-embedding-3-small
 
 # --- Reranker 配置 (用于混合检索重排) ---
-# 默认使用本地模型
+# 默认使用本地模型 BAAI/bge-reranker-base
 # RERANKER_MODEL_NAME=BAAI/bge-reranker-base
 
 # ============================================================
-# 存储配置
+# 常见邮箱服务器配置参考
 # ============================================================
-
-MAIL_STORAGE_ROOT=./mail_data
-MAIL_ATTACHMENT_PATH=./mail_data/attachments
-MAIL_DB_PATH=./mail_data/mail_index.db
-
-# ============================================================
-# 行为配置
-# ============================================================
-
-MAIL_DEFAULT_FETCH_DAYS=7
-MAIL_RETRY_COUNT=3
-MAIL_TIMEOUT=30
+#
+# | 邮箱       | IMAP 服务器           | SMTP 服务器            |
+# |-----------|----------------------|-----------------------|
+# | QQ 邮箱   | imap.qq.com:993      | smtp.qq.com:465       |
+# | Gmail     | imap.gmail.com:993   | smtp.gmail.com:465    |
+# | 网易 163  | imap.163.com:993     | smtp.163.com:465      |
+# | Outlook   | outlook.office365.com:993 | smtp.office365.com:587 |
+#
+# 注意：大多数邮箱需要使用"应用专用密码"而非登录密码
+# 请在邮箱设置中开启 IMAP/SMTP 服务并生成授权码
