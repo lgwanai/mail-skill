@@ -65,6 +65,23 @@ cp example.config.txt config.txt
 
 > **提示**：大多数邮箱（QQ、Gmail、网易等）需要使用**应用专用密码**而非登录密码。请在邮箱设置中开启 IMAP/SMTP 服务并生成授权码。
 
+### 方法二：Agent 自动配置（推荐非技术人员）
+
+如果你在 **Claude Code**、**WorkBuddy**、**Cursor** 等 AI Agent 中使用本 Skill，无需手动编辑配置文件。Agent 具备编码和文件操作能力，只需用自然语言描述配置需求即可：
+
+**在 Agent 对话中直接说**：
+
+> "帮我配置邮件功能，我的 QQ 邮箱是 `123456@qq.com`，授权码是 `xxxx`，LLM 用 DeepSeek，API Key 是 `sk-xxxx`"
+
+> "添加第二个邮箱账户，163 邮箱 `myname@163.com`"
+
+Agent 会自动：
+1. 复制 `example.config.txt` → `config.txt`
+2. 填入你提供的邮箱和 API 信息
+3. 自动识别常见邮箱的 IMAP/SMTP 服务器地址
+
+**无需编写任何代码或修改配置文件。**
+
 ---
 
 ## 🚀 使用指南
