@@ -12,7 +12,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from scripts.mail_manager.db import MailDatabase
+    from mail_manager.db import MailDatabase
 
 
 def _format_header_line(label: str, value: str | None) -> str:

@@ -139,7 +139,7 @@ class EmailClassifier:
         Returns:
             True if any pattern matches the sender
         """
-        sender = email.get("sender", "").lower()
+        sender = (email.get("sender") or "").lower()
         for pattern in rule.patterns:
             if pattern.lower() in sender:
                 return True
@@ -176,8 +176,8 @@ class EmailClassifier:
         Returns:
             True if any pattern matches subject or body
         """
-        subject = email.get("subject", "").lower()
-        body = email.get("body_text", "").lower()[:1000]
+        subject = (email.get("subject") or "").lower()
+        body = (email.get("body_text") or "").lower()[:1000]
         for pattern in rule.patterns:
             pattern_lower = pattern.lower()
             if pattern_lower in subject or pattern_lower in body:
@@ -283,9 +283,9 @@ def classify_with_llm(llm_client: "LLMClient", email: dict) -> Classification:
     body = (email.get("body_text", "") or "")[:500]
 
     prompt = EMAIL_CLASSIFICATION_PROMPT.format(
-        sender=sender,
-        subject=subject,
-        body=body,
+        sender=sender.replace("{", "{{").replace("}", "}}"),
+        subject=subject.replace("{", "{{").replace("}", "}}"),
+        body=body.replace("{", "{{").replace("}", "}}"),
     )
 
     try:

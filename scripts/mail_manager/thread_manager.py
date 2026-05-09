@@ -228,7 +228,9 @@ def generate_thread_summary(
 
     # Build prompt
     thread_content = "\n---\n".join(thread_text)
-    prompt = f"{THREAD_SUMMARY_PROMPT}\n\n{thread_content}\n\nSummary:"
+    prompt = THREAD_SUMMARY_PROMPT.format(
+        thread_content=thread_content.replace("{", "{{").replace("}", "}}")
+    )
 
     # Call LLM
     response = llm_client.chat(
@@ -308,7 +310,7 @@ def format_thread_view(
         # If no current_message_id specified, show full details for all emails
         if not current_message_id:
             for email in timeline:
-                sections.append(format_email_detail(email, port, attachments_dir))
+                sections.append(format_email_detail(email))
                 sections.append("")
         else:
             # Show current email with full detail, others as summary
@@ -317,7 +319,7 @@ def format_thread_view(
 
                 if msg_id == current_message_id:
                     sections.append("### Current Email")
-                    sections.append(format_email_detail(email, port, attachments_dir))
+                    sections.append(format_email_detail(email))
                 else:
                     # Other emails shown as summary
                     date = str(email.get("date") or "")[:10]

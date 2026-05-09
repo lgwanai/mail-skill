@@ -11,9 +11,9 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from scripts.mail_manager.attachment_parser.base import DocumentParser
-from scripts.mail_manager.llm.client import LLMClient
-from scripts.mail_manager.llm.prompts import IMAGE_DESCRIPTION_PROMPT
+from mail_manager.attachment_parser.base import DocumentParser
+from mail_manager.llm.client import LLMClient
+from mail_manager.llm.prompts import IMAGE_DESCRIPTION_PROMPT
 
 logger = logging.getLogger(__name__)
 

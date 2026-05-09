@@ -15,9 +15,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import markdown  # type: ignore[import-untyped]
 from dotenv import load_dotenv
-from jinja2 import Environment, FileSystemLoader
+
+try:
+    from jinja2 import Environment, FileSystemLoader
+    _JINJA2_AVAILABLE = True
+except ImportError:
+    _JINJA2_AVAILABLE = False
+    Environment = None  # type: ignore
+    FileSystemLoader = None  # type: ignore
 
 # Ensure the parent directory is in sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -98,6 +104,9 @@ def _process_attachments(
 
     final_attachments: list[str] = []
     temp_dir = tempfile.mkdtemp()
+    import atexit
+    import shutil
+    atexit.register(shutil.rmtree, temp_dir, ignore_errors=True)
 
     if zip_as:
         if not zip_as.endswith(".zip"):
@@ -640,13 +649,11 @@ def _append_signature(
     """Append signature to the email body if the signature file exists and is not empty."""
     # Also support a fallback to just using the email address as the folder name
     # In case the directory wasn't sanitized with _at_
-    fallback_path = (
-        signature_path.replace("_at_", "@")
-        .replace("_com", ".com")
-        .replace("_net", ".net")
-        .replace("_cn", ".cn")
-        .replace("_org", ".org")
-    )
+    # Replace _at_ first, then domain separators (order matters to avoid partial matches)
+    fallback_path = signature_path.replace("_at_", "@")
+    # Replace _dot_ segments safely
+    for domain_part in ("com", "net", "cn", "org", "edu", "gov", "io"):
+        fallback_path = fallback_path.replace(f"_{domain_part}", f".{domain_part}")
 
     actual_path = signature_path
     if not os.path.exists(actual_path):
@@ -677,8 +684,11 @@ def _append_signature(
     # Append to HTML if it exists
     new_html_body = html_body
     if html_body:
-        # Simple HTML signature append
-        html_signature = markdown.markdown(signature)
+        try:
+            import markdown  # type: ignore[import-untyped]
+            html_signature = markdown.markdown(signature)
+        except ImportError:
+            html_signature = ""
         if "</body>" in html_body.lower():
             # Insert before closing body tag
             import re
@@ -697,6 +707,10 @@ def _append_signature(
 
 def _markdown_to_html(md_text: str) -> str:
     """Convert markdown text to styled HTML for emails."""
+    try:
+        import markdown  # type: ignore[import-untyped]
+    except ImportError:
+        return ""
     html_content = markdown.markdown(md_text, extensions=["tables", "fenced_code", "nl2br"])
     # Render with our template
     try:
@@ -762,11 +776,8 @@ def cmd_send(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
         # Replace literal "\n" strings with actual newline characters
         # This handles cases where AI passes "Line 1\nLine 2" as a single string argument
         body_text = args.body.replace("\\n", "\n")
-        html_body = getattr(args, "html_body", None)
-
-        # ALWAYS auto-convert markdown body to HTML if not provided, or override if provided
-        # Since we want to FORCE markdown to HTML, we will ignore args.html_body and always generate it
-        html_body = _markdown_to_html(body_text)
+        user_html = getattr(args, "html_body", None)
+        html_body = user_html if user_html else _markdown_to_html(body_text)
 
         # Append signature
         body_text, html_body = _append_signature(body_text, html_body, paths["signature_path"])
@@ -963,12 +974,12 @@ def cmd_mark(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
 
         if args.read is not None:
             is_read = bool(args.read)
-            client.mark_as_read(imap_uid, email["folder"], is_read)
+            client.mark_as_read([str(imap_uid)], email["folder"], is_read)
             isolated_db.update_flags(args.message_id, is_read=is_read)
 
         if args.starred is not None:
             is_starred = bool(args.starred)
-            client.mark_as_starred(imap_uid, email["folder"], is_starred)
+            client.mark_as_starred([str(imap_uid)], email["folder"], is_starred)
             isolated_db.update_flags(args.message_id, is_starred=is_starred)
 
         print(json.dumps(success_response(message="Flags updated")))
@@ -1005,7 +1016,7 @@ def cmd_move(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
             )
             return
 
-        client.move_emails(imap_uid, args.target_folder, email["folder"])
+        client.move_emails([str(imap_uid)], args.target_folder, email["folder"])
         isolated_db.update_flags(args.message_id, folder=args.target_folder)
         print(json.dumps(success_response(message=f"Moved to {args.target_folder}")))
     except Exception as e:
@@ -1041,7 +1052,7 @@ def cmd_delete(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
             )
             return
 
-        client.delete_emails(imap_uid, email["folder"])
+        client.delete_emails([str(imap_uid)], email["folder"])
         isolated_db.delete_email(args.message_id)
         print(json.dumps(success_response(message="Email deleted")))
     except Exception as e:
@@ -1388,14 +1399,18 @@ def cmd_batch_mark(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
 
         for account, account_emails in emails_by_account.items():
             folder_client = get_client(config, account)
-            uids = [e.get("imap_uid") for e in account_emails if e.get("imap_uid")]
+            uids = [str(e.get("imap_uid")) for e in account_emails if e.get("imap_uid")]
             if not uids:
                 continue
 
-            if args.read is not None:
-                folder_client.mark_as_read(uids, folder, bool(args.read))
-            if args.starred is not None:
-                folder_client.mark_as_starred(uids, folder, bool(args.starred))
+            try:
+                if args.read is not None:
+                    folder_client.mark_as_read(uids, folder, bool(args.read))
+                if args.starred is not None:
+                    folder_client.mark_as_starred(uids, folder, bool(args.starred))
+            except Exception as e:
+                print(json.dumps(error_response(ErrorCodes.SERVER_IMAP_CONNECTION_FAILED, str(e))))
+                return
 
     print(
         json.dumps(
@@ -1651,7 +1666,11 @@ def cmd_llm_reclassify(args: Any, config: dict[str, Any], db: MailDatabase) -> N
     'uncategorized' category and uses LLM to provide a more accurate classification.
     """
     from mail_manager.classifier import classify_with_llm
-    from mail_manager.llm.client import LLMClient
+    from mail_manager.llm.client import LLMClient, is_ai_enabled
+
+    if not is_ai_enabled():
+        print("AI 功能未配置。请在 config.txt 中设置 LLM_API_KEY 以启用 LLM 重分类功能。")
+        return
 
     client = get_client(config, getattr(args, "account", None))
     paths = _get_account_paths(config, client.email)
@@ -1786,11 +1805,16 @@ def cmd_parse_attachments(args: Any, config: dict[str, Any], db: MailDatabase) -
         print("AI 功能未配置。请在 config.txt 中设置 LLM_API_KEY 以启用附件内容解析功能。")
         return
 
+    # Use account-isolated database
+    client = get_client(config, getattr(args, "account", None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths["db_path"])
+
     llm_client = LLMClient()
 
     if args.message_id:
         # Parse attachments for specific email
-        cursor = db._get_connection().cursor()
+        cursor = isolated_db._get_connection().cursor()
         cursor.execute("SELECT * FROM attachments WHERE message_id = ?", (args.message_id,))
         attachments = [dict(row) for row in cursor.fetchall()]
         if not attachments:
@@ -1798,7 +1822,7 @@ def cmd_parse_attachments(args: Any, config: dict[str, Any], db: MailDatabase) -
             return
     elif args.all:
         # Parse all unprocessed attachments (content_text is NULL)
-        cursor = db._get_connection().cursor()
+        cursor = isolated_db._get_connection().cursor()
         cursor.execute("SELECT * FROM attachments WHERE content_text IS NULL OR content_text = ''")
         attachments = [dict(row) for row in cursor.fetchall()]
         if not attachments:
@@ -1821,7 +1845,7 @@ def cmd_parse_attachments(args: Any, config: dict[str, Any], db: MailDatabase) -
             result = parse_attachment(path, llm_client)
             if result and result.text:
                 # Store content in database
-                db.save_attachment_content(local_path, result.text)
+                isolated_db.save_attachment_content(local_path, result.text)
                 print(f"Parsed: {att.get('filename')} ({len(result.text)} chars)")
                 parsed_count += 1
             else:
@@ -1846,23 +1870,26 @@ def cmd_ai_reply(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
         print("AI 功能未配置。请在 config.txt 中设置 LLM_API_KEY 以启用 AI 回复功能。")
         return
 
-    cursor = db._get_connection().cursor()
-    cursor.execute("SELECT * FROM emails WHERE message_id = ?", (args.message_id,))
-    row = cursor.fetchone()
-    if not row:
+    # Use account-isolated database
+    client = get_client(config, getattr(args, "account", None))
+    paths = _get_account_paths(config, client.email)
+    isolated_db = MailDatabase(paths["db_path"])
+
+    email_record = isolated_db.get_email(args.message_id)
+    if not email_record:
         print(f"Email not found: {args.message_id}")
         return
-    email = dict(row)
+    email = email_record
 
     llm_client = LLMClient()
 
     # Get thread context if available
     thread = None
     if args.with_thread:
-        thread = get_enhanced_thread_timeline(db, args.message_id)
+        thread = get_enhanced_thread_timeline(isolated_db, args.message_id)
 
     # Get few-shot examples
-    examples = get_few_shot_examples(db)
+    examples = get_few_shot_examples(isolated_db)
 
     # Compose reply
     print("Generating reply...")
@@ -1884,7 +1911,11 @@ def cmd_ai_reply(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
     print("\n--- Suggested Reply ---")
     print(reply)
     print("-----------------------")
-    response = input("Send this reply? (y/n/e=edit): ").strip().lower()
+    try:
+        response = input("Send this reply? (y/n/e=edit): ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print("Reply cancelled.")
+        return
 
     final_reply = None
     if response == "y":
@@ -1908,13 +1939,13 @@ def cmd_ai_reply(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
             client.send_email(
                 to=email.get("sender", ""),
                 subject=f"Re: {email.get('subject', '')}",
-                body=final_reply,
+                body_text=final_reply,
             )
             print("Reply sent!")
 
             # Store positive feedback
             store_reply_feedback(
-                db=db,
+                db=isolated_db,
                 original_message_id=args.message_id,
                 original_email=str(email),
                 suggested_reply=reply,
@@ -1926,7 +1957,7 @@ def cmd_ai_reply(args: Any, config: dict[str, Any], db: MailDatabase) -> None:
     else:
         # Store negative feedback if user rejected
         store_reply_feedback(
-            db=db,
+            db=isolated_db,
             original_message_id=args.message_id,
             original_email=str(email),
             suggested_reply=reply,
@@ -2323,8 +2354,17 @@ def main():
         parser.print_help()
         return
 
-    config = load_config()
-    db = MailDatabase(config["DB_PATH"])
+    try:
+        config = load_config()
+        db = MailDatabase(config["DB_PATH"])
+    except Exception as e:
+        print(json.dumps(error_response(ErrorCodes.INTERNAL_ERROR, f"Failed to initialize: {e}")))
+        return
+
+    if not config.get("ACCOUNTS"):
+        print(json.dumps(error_response(ErrorCodes.BIZ_ACCOUNT_NOT_CONFIGURED,
+              "No mail accounts configured. Please copy example.config.txt to config.txt and fill in your email details.")))
+        return
 
     if args.command == "fetch":
         cmd_fetch(args, config, db)

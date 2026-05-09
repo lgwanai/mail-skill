@@ -62,7 +62,10 @@ class LLMClient:
             )
 
         api_base = os.getenv("LLM_API_BASE")
-        timeout = int(os.getenv("LLM_TIMEOUT", "30"))
+        try:
+            timeout = int(os.getenv("LLM_TIMEOUT", "30"))
+        except (ValueError, TypeError):
+            timeout = 30
 
         self.client = OpenAI(api_key=api_key, base_url=api_base, timeout=timeout)
         self.model = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
@@ -93,18 +96,26 @@ class LLMClient:
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
+
+            if not response.choices:
+                raise MailSkillError("LLM returned empty response choices")
+
+            choice = response.choices[0]
+            usage = response.usage
             return LLMResponse(
-                content=response.choices[0].message.content or "",
-                model=response.model,
+                content=choice.message.content or "",
+                model=response.model or self.model,
                 usage={
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens,
-                    "total_tokens": response.usage.total_tokens,
+                    "prompt_tokens": usage.prompt_tokens if usage else 0,
+                    "completion_tokens": usage.completion_tokens if usage else 0,
+                    "total_tokens": usage.total_tokens if usage else 0,
                 },
-                finish_reason=response.choices[0].finish_reason,
+                finish_reason=choice.finish_reason or "unknown",
             )
         except (APIError, RateLimitError) as e:
             raise MailSkillError(f"LLM API error: {e}") from e
+        except (IndexError, AttributeError, KeyError) as e:
+            raise MailSkillError(f"Unexpected LLM response format: {e}") from e
 
     def chat_with_history(
         self,

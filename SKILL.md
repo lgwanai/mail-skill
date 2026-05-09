@@ -26,9 +26,6 @@ A powerful email management skill that acts as your personal email assistant.
 ## Quick Start
 
 ```bash
-# Configure via web UI (first time)
-python scripts/mail_cli.py config
-
 # Fetch latest emails
 python scripts/mail_cli.py fetch --days 7
 
@@ -312,8 +309,11 @@ Copy `example.config.txt` to `config.txt` and fill in your details:
 # Email Account
 MAIL_ACCOUNT_1_EMAIL=your@email.com
 MAIL_ACCOUNT_1_PASSWORD=your-app-password
+MAIL_ACCOUNT_1_PROTOCOL=imap
 MAIL_ACCOUNT_1_IMAP_SERVER=imap.gmail.com
 MAIL_ACCOUNT_1_IMAP_PORT=993
+MAIL_ACCOUNT_1_POP3_SERVER=pop.gmail.com
+MAIL_ACCOUNT_1_POP3_PORT=995
 MAIL_ACCOUNT_1_SMTP_SERVER=smtp.gmail.com
 MAIL_ACCOUNT_1_SMTP_PORT=465
 MAIL_ACCOUNT_1_USE_SSL=true
@@ -415,7 +415,7 @@ pip install -r requirements.txt
 
 ## Troubleshooting
 
-- **Config not found**: Run `python scripts/mail_cli.py config` to set up
+- **Config not found**: Copy `example.config.txt` to `config.txt` and fill in your email details
 - **IMAP connection failed**: Check server settings and app passwords
 - **Search returns empty**: Run `rebuild-index` to rebuild search indices
 - **Attachments not previewing**: Check if attachment server is running (auto-starts on demand)

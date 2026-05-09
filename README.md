@@ -45,8 +45,8 @@
 
 ### 环境要求
 - Python 3.8 或以上
-- 支持 IMAP/SMTP 的邮箱账户
-- OpenAI API Key（用于 AI 功能，可选）
+- 支持 IMAP 或 POP3 的邮箱账户
+- LLM API Key（用于 AI 功能，可选，支持 DeepSeek / 硅基流动 / 通义千问等 OpenAI 兼容 API）
 
 ### 快速安装
 
@@ -174,6 +174,30 @@ mail-skill/
 ---
 
 ## 🗓️ 更新日志
+
+### v2.1.0 (2025-05) — POP3 支持 & 架构优化
+
+#### 新功能
+- **POP3 协议支持**：同时支持 IMAP 和 POP3 协议，可通过 `MAIL_ACCOUNT_N_PROTOCOL=pop3` 切换
+- **独立 AI 供应商配置**：LLM 和 Embedding 可使用不同供应商（如 LLM 用 DeepSeek，Embedding 用阿里云）
+- **AI 功能可选化**：不配置 `LLM_API_KEY` 时，邮件收发、搜索等基础功能正常工作，AI 功能优雅降级
+- **环境变量命名重构**：`OPENAI_API_KEY` → `LLM_API_KEY`，`EMBEDDING_API_KEY` 独立配置
+
+#### 修复（~120 bugs）
+- **导入修复**：移除脆弱的 `from scripts.xxx` 导入，改为 `from mail_manager.xxx`
+- **可选依赖懒加载**：`chromadb`、`markdown`、`jinja2`、`openpyxl`、`fitz`、`pptx` 等模块缺失时不再阻止 CLI 启动
+- **协议一致性**：IMAP/POP3 的 Message-ID 归一化、日期时区处理、端口解析统一
+- **配置安全**：端口值类型转换保护、`USE_SSL` 布尔化、空账户前置检查
+- **SQLite WAL 模式**：启用 WAL 日志 + busy_timeout，提升并发安全性
+- **ChromaDB 防重试风暴**：初始化失败后禁用重试，避免无限错误循环
+- **线程时间线修复**：`in_reply_to` 括号匹配，`SQLITE_MAX_VARIABLE` 分块查询
+- **LLM prompt 安全**：`{` `}` 转义防止 `str.format()` crash
+- **全局错误处理**：`main()` 未配置账户时输出友好 JSON 错误
+- **资源泄漏修复**：`tempfile.mkdtemp` 注册 atexit 清理、MailBox socket 异常释放、数据库连接管理
+
+#### 移除
+- **Web 配置界面**：回归 `config.txt` 文件配置方式
+- **SQLite 配置数据库**：简化配置流程
 
 ### v2.0.0 (2024-04)
 

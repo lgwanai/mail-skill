@@ -6,10 +6,29 @@ import os
 import sqlite3
 from typing import Any
 
-import chromadb
-from chromadb.utils import embedding_functions
+try:
+    import chromadb
+    from chromadb.utils import embedding_functions
+    _CHROMADB_AVAILABLE = True
+except ImportError:
+    _CHROMADB_AVAILABLE = False
+    chromadb = None  # type: ignore
+    embedding_functions = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_load_labels(raw: str | None) -> list[str]:
+    """Safely parse labels JSON, returning empty list on failure."""
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return parsed
+        return []
+    except (json.JSONDecodeError, TypeError):
+        return []
 
 
 class MailDatabase:
@@ -27,36 +46,46 @@ class MailDatabase:
         self._collection: Any | None = None
 
     def _get_chroma_collection(self) -> Any:
-        if self._collection is None:
-            chroma_dir = os.path.join(os.path.dirname(self.db_path), "chroma_db")
-            os.makedirs(chroma_dir, exist_ok=True)
-            self._chroma_client = chromadb.PersistentClient(path=chroma_dir)
+        if not _CHROMADB_AVAILABLE:
+            logger.debug("ChromaDB not available, vector search disabled")
+            return None
+        if self._collection is None and not getattr(self, "_chroma_init_failed", False):
+            try:
+                chroma_dir = os.path.join(os.path.dirname(self.db_path), "chroma_db")
+                os.makedirs(chroma_dir, exist_ok=True)
+                self._chroma_client = chromadb.PersistentClient(path=chroma_dir)
 
-            # Use EMBEDDING_* env vars for cloud embedding, fallback to local model
-            api_key = os.getenv("EMBEDDING_API_KEY")
-            api_base = os.getenv("EMBEDDING_API_BASE")
-            ef: Any
-            if api_key:
-                if api_base and api_base.endswith("/embeddings"):
-                    api_base = api_base[:-11]
+                # Use EMBEDDING_* env vars for cloud embedding, fallback to local model
+                api_key = os.getenv("EMBEDDING_API_KEY")
+                api_base = os.getenv("EMBEDDING_API_BASE")
+                ef: Any
+                if api_key:
+                    if api_base and api_base.rstrip("/").endswith("/embeddings"):
+                        api_base = api_base.rstrip("/")[: -len("/embeddings")]
 
-                ef = embedding_functions.OpenAIEmbeddingFunction(
-                    api_key=api_key,
-                    api_base=api_base,
-                    model_name=os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-3-small"),
-                )
-            else:
-                local_model = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
-                if local_model == "all-MiniLM-L6-v2":
-                    ef = embedding_functions.DefaultEmbeddingFunction()
-                else:
-                    ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-                        model_name=local_model
+                    ef = embedding_functions.OpenAIEmbeddingFunction(
+                        api_key=api_key,
+                        api_base=api_base,
+                        model_name=os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-3-small"),
                     )
+                else:
+                    local_model = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
+                    if local_model == "all-MiniLM-L6-v2":
+                        ef = embedding_functions.DefaultEmbeddingFunction()
+                    else:
+                        ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+                            model_name=local_model
+                        )
 
-            self._collection = self._chroma_client.get_or_create_collection(
-                name="emails", embedding_function=ef
-            )
+                self._collection = self._chroma_client.get_or_create_collection(
+                    name="emails", embedding_function=ef
+                )
+            except Exception as e:
+                logger.error(f"Failed to initialize ChromaDB: {e}")
+                self._chroma_client = None
+                self._collection = None
+                self._chroma_init_failed = True
+                raise
         return self._collection
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -66,8 +95,10 @@ class MailDatabase:
             sqlite3.Connection: A connection with Row factory enabled.
         """
         os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=10)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
     def _init_db(self) -> None:
@@ -207,8 +238,8 @@ class MailDatabase:
                         DELETE FROM emails_fts WHERE rowid=old.id;
                     END;
                 """)
-            except sqlite3.OperationalError:
-                pass
+            except sqlite3.OperationalError as e:
+                logger.warning(f"FTS5 not available, falling back to LIKE search: {e}")
 
             # Auto-rebuild FTS5 if it's empty but emails exist
             try:
@@ -245,11 +276,17 @@ class MailDatabase:
         Args:
             email_data: Dictionary containing email data.
         """
+        message_id = email_data.get("message_id")
+        if not message_id:
+            logger.error("Cannot save email: missing message_id")
+            return
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
-            # Convert list of labels to JSON string
-            labels = json.dumps(email_data.get("labels", []))
+            labels = email_data.get("labels", [])
+            if not isinstance(labels, str):
+                labels = json.dumps(labels)
 
             cursor.execute(
                 """
@@ -386,9 +423,7 @@ class MailDatabase:
             result = []
             for row in rows:
                 email_dict = dict(row)
-                email_dict["labels"] = (
-                    json.loads(email_dict["labels"]) if email_dict["labels"] else []
-                )
+                email_dict["labels"] = _safe_load_labels(email_dict["labels"])
                 cursor.execute(
                     "SELECT * FROM attachments WHERE message_id = ?", (email_dict["message_id"],)
                 )
@@ -520,13 +555,16 @@ class MailDatabase:
             if not base_row:
                 return []
             base = dict(base_row)
-            ids = {norm(base["message_id"])}
+            ids = {norm(base["message_id"]), base["message_id"]}
             timeline = [base]
             visited = {base["message_id"]}
             while True:
                 found_new = False
-                q_marks = ",".join(["?"] * len(ids)) if ids else "?"
-                params = list(ids) if ids else [seed_norm]
+                search_ids = set(ids)
+                for mid in list(ids):
+                    search_ids.add(f"<{mid}>" if not mid.startswith("<") else mid)
+                q_marks = ",".join(["?"] * len(search_ids))
+                params = list(search_ids)
                 cursor.execute(
                     f"""
                     SELECT * FROM emails
@@ -545,6 +583,7 @@ class MailDatabase:
                     timeline.append(em)
                     visited.add(em["message_id"])
                     ids.add(norm(em.get("message_id")))
+                    ids.add(em.get("message_id"))
                     found_new = True
                 if not found_new or len(timeline) >= limit:
                     break
@@ -651,9 +690,7 @@ class MailDatabase:
             result = []
             for row in rows:
                 email_dict = dict(row)
-                email_dict["labels"] = (
-                    json.loads(email_dict["labels"]) if email_dict["labels"] else []
-                )
+                email_dict["labels"] = _safe_load_labels(email_dict["labels"])
 
                 # Fetch attachments
                 cursor.execute(
@@ -684,7 +721,7 @@ class MailDatabase:
                 return None
 
             email_dict = dict(row)
-            email_dict["labels"] = json.loads(email_dict["labels"]) if email_dict["labels"] else []
+            email_dict["labels"] = _safe_load_labels(email_dict["labels"])
 
             cursor.execute("SELECT * FROM attachments WHERE message_id = ?", (message_id,))
             att_rows = cursor.fetchall()
@@ -772,16 +809,19 @@ class MailDatabase:
         if not updates:
             return 0
 
-        # Use IN clause for batch update
-        placeholders = ", ".join(["?"] * len(message_ids))
-        sql = f"UPDATE emails SET {', '.join(updates)} WHERE message_id IN ({placeholders})"
-        params.extend(message_ids)
-
+        # Use IN clause for batch update, chunked to avoid SQLITE_MAX_VARIABLE
+        chunk_size = 500
+        total_updated = 0
+        sql = f"UPDATE emails SET {', '.join(updates)} WHERE message_id IN ({{}})"
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(sql, params)
+            for i in range(0, len(message_ids), chunk_size):
+                chunk = message_ids[i:i + chunk_size]
+                placeholders = ", ".join(["?"] * len(chunk))
+                cursor.execute(sql.format(placeholders), params + chunk)
+                total_updated += cursor.rowcount
             conn.commit()
-            return cursor.rowcount
+        return total_updated
 
     def update_classification(
         self,
@@ -878,7 +918,7 @@ class MailDatabase:
             cursor.execute("SELECT labels FROM emails WHERE message_id = ?", (message_id,))
             row = cursor.fetchone()
             if row and row["labels"]:
-                return json.loads(row["labels"])
+                return _safe_load_labels(row["labels"])
             return []
 
     def add_tags(self, message_id: str, tags: list[str]) -> None:

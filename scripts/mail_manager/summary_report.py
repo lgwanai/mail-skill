@@ -7,6 +7,7 @@ using LLM for structured summary extraction.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -17,6 +18,11 @@ if TYPE_CHECKING:
     from mail_manager.llm.client import LLMClient
 
 from mail_manager.llm.prompts import EMAIL_SUMMARY_PROMPT, OVERALL_SUMMARY_PROMPT
+
+
+def _escape_braces(text: str) -> str:
+    """Escape { and } so str.format() treats them as literal text."""
+    return text.replace("{", "{{").replace("}", "}}")
 
 
 @dataclass
@@ -250,10 +256,10 @@ def summarize_email(llm_client: LLMClient, email: dict[str, Any]) -> EmailSummar
 
     # Format the prompt with email details
     prompt = EMAIL_SUMMARY_PROMPT.format(
-        sender=sender,
-        subject=subject,
+        sender=_escape_braces(sender),
+        subject=_escape_braces(subject),
         date=str(date),
-        body=body_text,
+        body=_escape_braces(body_text),
     )
 
     # Call LLM with low temperature for consistent JSON output
@@ -336,7 +342,7 @@ def generate_overall_summary(
 
     # Format the prompt
     prompt = OVERALL_SUMMARY_PROMPT.format(
-        sender_summaries="\n".join(summaries_text),
+        sender_summaries=_escape_braces("\n".join(summaries_text)),
     )
 
     # Call LLM with low temperature for consistent JSON output
@@ -687,6 +693,7 @@ def generate_email_summary_report(
 
     # Step 6: Save to file if path provided
     if output_path:
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(report)
 

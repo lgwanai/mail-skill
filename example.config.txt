@@ -9,8 +9,14 @@
 MAIL_ACCOUNT_1_EMAIL=your_email@example.com
 # 密码请使用"应用专用密码（授权码）"，而不是你的登录密码
 MAIL_ACCOUNT_1_PASSWORD=your_app_password
+# 协议选择：imap（推荐）或 pop3
+# IMAP 支持文件夹、已读标记、移动等完整功能
+# POP3 只能收取收件箱，不支持文件夹和状态管理
+MAIL_ACCOUNT_1_PROTOCOL=imap
 MAIL_ACCOUNT_1_IMAP_SERVER=imap.example.com
 MAIL_ACCOUNT_1_IMAP_PORT=993
+MAIL_ACCOUNT_1_POP3_SERVER=pop.example.com
+MAIL_ACCOUNT_1_POP3_PORT=995
 MAIL_ACCOUNT_1_SMTP_SERVER=smtp.example.com
 MAIL_ACCOUNT_1_SMTP_PORT=465
 MAIL_ACCOUNT_1_USE_SSL=true

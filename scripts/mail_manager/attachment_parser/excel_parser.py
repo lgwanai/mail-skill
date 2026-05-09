@@ -6,10 +6,13 @@ Extracts text and metadata from Excel spreadsheets (.xlsx, .xls).
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
+
+logger = logging.getLogger(__name__)
 
 
 class ExcelParser:
@@ -40,7 +43,11 @@ class ExcelParser:
         Returns:
             Extracted text from all sheets, joined by newlines.
         """
-        wb = load_workbook(file_path, read_only=True, data_only=True)
+        try:
+            wb = load_workbook(file_path, read_only=True, data_only=True)
+        except Exception as e:
+            logger.error(f"Failed to open Excel {file_path}: {e}")
+            return ""
         try:
             text_parts = []
             for sheet in wb.worksheets:
@@ -62,7 +69,11 @@ class ExcelParser:
         Returns:
             Dictionary with sheet_names and type.
         """
-        wb = load_workbook(file_path, read_only=True, data_only=True)
+        try:
+            wb = load_workbook(file_path, read_only=True, data_only=True)
+        except Exception as e:
+            logger.error(f"Failed to open Excel {file_path}: {e}")
+            return {"type": "excel", "sheets": []}
         try:
             return {
                 "sheet_names": list(wb.sheetnames),

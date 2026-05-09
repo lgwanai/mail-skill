@@ -11,16 +11,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from scripts.mail_manager.attachment_parser.base import DocumentParser, ParseResult
-from scripts.mail_manager.attachment_parser.excel_parser import ExcelParser
-from scripts.mail_manager.attachment_parser.image_parser import ImageParser
-from scripts.mail_manager.attachment_parser.pdf_parser import PDFParser
-from scripts.mail_manager.attachment_parser.pptx_parser import PPTXParser
-from scripts.mail_manager.attachment_parser.text_parser import TextParser
-
-if TYPE_CHECKING:
-    from scripts.mail_manager.db import MailDatabase
-    from scripts.mail_manager.llm.client import LLMClient
+from mail_manager.attachment_parser.base import DocumentParser, ParseResult
+from mail_manager.attachment_parser.text_parser import TextParser
 
 __all__ = [
     "DocumentParser",
@@ -36,35 +28,31 @@ __all__ = [
 ]
 
 # Parser registry: maps file extensions to parser classes
-_PARSER_REGISTRY: dict[str, type[DocumentParser]] = {
-    ".pdf": PDFParser,
-    ".xlsx": ExcelParser,
-    ".xls": ExcelParser,
-    ".pptx": PPTXParser,
-    ".txt": TextParser,
-    ".md": TextParser,
-    ".jpg": ImageParser,
-    ".jpeg": ImageParser,
-    ".png": ImageParser,
-    ".gif": ImageParser,
+_PARSER_REGISTRY: dict[str, str] = {
+    ".pdf": "mail_manager.attachment_parser.pdf_parser.PDFParser",
+    ".xlsx": "mail_manager.attachment_parser.excel_parser.ExcelParser",
+    ".pptx": "mail_manager.attachment_parser.pptx_parser.PPTXParser",
+    ".txt": "mail_manager.attachment_parser.text_parser.TextParser",
+    ".md": "mail_manager.attachment_parser.text_parser.TextParser",
+    ".markdown": "mail_manager.attachment_parser.text_parser.TextParser",
+    ".jpg": "mail_manager.attachment_parser.image_parser.ImageParser",
+    ".jpeg": "mail_manager.attachment_parser.image_parser.ImageParser",
+    ".png": "mail_manager.attachment_parser.image_parser.ImageParser",
+    ".gif": "mail_manager.attachment_parser.image_parser.ImageParser",
 }
+
+import importlib
 
 
 def get_parser(file_path: Path) -> DocumentParser | None:
-    """
-    Get appropriate parser for a file based on its extension.
-
-    Args:
-        file_path: Path to the file to parse.
-
-    Returns:
-        Parser instance for the file type, or None if unsupported.
-    """
     suffix = file_path.suffix.lower()
-    parser_class = _PARSER_REGISTRY.get(suffix)
-    if parser_class:
-        return parser_class()
-    return None
+    parser_path = _PARSER_REGISTRY.get(suffix)
+    if not parser_path:
+        return None
+    module_name, class_name = parser_path.rsplit(".", 1)
+    module = importlib.import_module(module_name)
+    parser_class = getattr(module, class_name)
+    return parser_class()
 
 
 def parse_attachment(file_path: Path, llm_client: LLMClient | None = None) -> ParseResult:

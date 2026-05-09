@@ -6,10 +6,13 @@ Extracts text and metadata from PDF documents.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 import fitz  # PyMuPDF
+
+logger = logging.getLogger(__name__)
 
 
 class PDFParser:
@@ -37,7 +40,11 @@ class PDFParser:
         Returns:
             Extracted text from all pages, joined by newlines.
         """
-        doc = fitz.open(file_path)
+        try:
+            doc = fitz.open(file_path)
+        except Exception as e:
+            logger.error(f"Failed to open PDF {file_path}: {e}")
+            return ""
         try:
             text_parts = []
             for page in doc:
@@ -56,7 +63,11 @@ class PDFParser:
         Returns:
             Dictionary with page_count, title (if available), and type.
         """
-        doc = fitz.open(file_path)
+        try:
+            doc = fitz.open(file_path)
+        except Exception as e:
+            logger.error(f"Failed to open PDF {file_path}: {e}")
+            return {"page_count": 0, "type": "pdf"}
         try:
             metadata = doc.metadata or {}
             return {

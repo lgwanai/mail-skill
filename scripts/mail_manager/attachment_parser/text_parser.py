@@ -38,8 +38,13 @@ class TextParser:
         Returns:
             File content as string.
         """
-        with open(file_path, encoding="utf-8", errors="ignore") as f:
-            return f.read()
+        try:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
+                return f.read()
+        except (OSError, IOError) as e:
+            logger = __import__("logging").getLogger(__name__)
+            logger.error(f"Failed to read text file {file_path}: {e}")
+            return ""
 
     def extract_metadata(self, file_path: Path) -> dict[str, Any]:
         """
@@ -53,6 +58,6 @@ class TextParser:
         """
         file_type = "markdown" if file_path.suffix.lower() == ".md" else "text"
         return {
-            "size_bytes": file_path.stat().st_size,
+            "size_bytes": file_path.stat().st_size if file_path.exists() else 0,
             "type": file_type,
         }
