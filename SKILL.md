@@ -419,3 +419,34 @@ pip install -r requirements.txt
 - **IMAP connection failed**: Check server settings and app passwords
 - **Search returns empty**: Run `rebuild-index` to rebuild search indices
 - **Attachments not previewing**: Check if attachment server is running (auto-starts on demand)
+
+## Updates
+
+### /mail-update
+
+Pull the latest code from GitHub and back up old files:
+
+```bash
+cd "$(dirname "$(find . -name SKILL.md -path "*/mail-skill/*" | head -1)")" 2>/dev/null || cd mail-skill
+
+# Create timestamped backup of current scripts
+BACKUP_DIR="backup/$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+cp -r scripts requirements.txt example.config.txt SKILL.md README.md "$BACKUP_DIR/" 2>/dev/null
+
+# Pull latest code
+git pull origin main
+
+# Reinstall dependencies
+pip install -r requirements.txt
+
+echo "Updated to $(git log -1 --format='%h %s')"
+echo "Backup saved to $BACKUP_DIR"
+```
+
+**What it does:**
+1. Locates the mail-skill directory
+2. Creates a timestamped backup of all source files to `backup/`
+3. Pulls the latest code from GitHub
+4. Reinstalls dependencies
+5. Shows the latest commit info
