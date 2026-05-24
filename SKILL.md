@@ -424,29 +424,35 @@ pip install -r requirements.txt
 
 ### /mail-update
 
-Pull the latest code from GitHub and back up old files:
+Clone or update mail-skill from GitHub, with automatic backup:
 
 ```bash
-cd "$(dirname "$(find . -name SKILL.md -path "*/mail-skill/*" | head -1)")" 2>/dev/null || cd mail-skill
+REPO_URL="https://github.com/lgwanai/mail-skill.git"
+SKILL_DIR="mail-skill"
 
-# Create timestamped backup of current scripts
-BACKUP_DIR="backup/$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$BACKUP_DIR"
-cp -r scripts requirements.txt example.config.txt SKILL.md README.md "$BACKUP_DIR/" 2>/dev/null
-
-# Pull latest code
-git pull origin main
+if [ -d "$SKILL_DIR/.git" ]; then
+    # Already cloned — backup then pull
+    cd "$SKILL_DIR"
+    BACKUP_DIR="backup/$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$BACKUP_DIR"
+    cp -r scripts requirements.txt example.config.txt SKILL.md README.md "$BACKUP_DIR/" 2>/dev/null
+    git pull origin main
+else
+    # First time — clone
+    rm -rf "$SKILL_DIR"
+    git clone "$REPO_URL" "$SKILL_DIR"
+    cd "$SKILL_DIR"
+fi
 
 # Reinstall dependencies
 pip install -r requirements.txt
 
 echo "Updated to $(git log -1 --format='%h %s')"
-echo "Backup saved to $BACKUP_DIR"
+[ -n "${BACKUP_DIR:-}" ] && echo "Backup saved to $BACKUP_DIR"
 ```
 
 **What it does:**
-1. Locates the mail-skill directory
-2. Creates a timestamped backup of all source files to `backup/`
-3. Pulls the latest code from GitHub
-4. Reinstalls dependencies
-5. Shows the latest commit info
+1. If already cloned: backs up source files to `backup/YYYYMMDD_HHMMSS/`, then `git pull`
+2. If first time: `git clone` from GitHub
+3. Reinstalls dependencies
+4. Shows the latest commit info and backup path
